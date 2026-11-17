@@ -47,6 +47,18 @@ class KeyboardLayoutTest {
     }
 
     @Test
+    fun leftAloneTheKeyRowGivesWayToADeskKeyboard() {
+        assertTrue(keyRowShown(choice = null, hardKeyboard = false))
+        assertFalse(keyRowShown(choice = null, hardKeyboard = true))
+    }
+
+    @Test
+    fun theKeyRowChoiceWinsEitherWay() {
+        assertTrue(keyRowShown(choice = true, hardKeyboard = true))
+        assertFalse(keyRowShown(choice = false, hardKeyboard = false))
+    }
+
+    @Test
     fun aConnectedDeskKeyboardIsSeen() {
         assertTrue(hasHardKeyboard(Configuration.KEYBOARD_QWERTY, Configuration.HARDKEYBOARDHIDDEN_NO))
     }

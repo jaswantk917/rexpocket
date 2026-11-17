@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -44,6 +45,8 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
     val terminalTypeface by model.terminalTypeface.collectAsState()
     val terminalFont by model.terminalFont.collectAsState()
     var fontSettingsOpen by remember { mutableStateOf(false) }
+    // Kept above the terminal, so hiding the key row lasts across tabs and trips to the list.
+    var keyRowChoice by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val tailscale by model.tailscale.collectAsState()
     val tailscaleStatus by model.tailscaleStatus.collectAsState()
     val tailnetError by model.tailnetError.collectAsState()
@@ -138,6 +141,8 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     onDismissUpload = model::dismissUpload,
                     onRetryUpload = model::retryUpload,
                     compact = compact,
+                    keyRowChoice = keyRowChoice,
+                    onKeyRowChoice = { keyRowChoice = it },
                 )
             }
         }

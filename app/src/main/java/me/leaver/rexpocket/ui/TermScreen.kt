@@ -5,6 +5,11 @@ import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -156,6 +161,9 @@ internal fun TermScreen(
     onRetryUpload: () -> Unit,
     /** Beside the session sidebar of a wide window: a one-line title bar, and no way back to draw. */
     compact: Boolean = false,
+    /** Whether the person showed (true) or hid (false) the key row; null leaves it to the keyboard. */
+    keyRowChoice: Boolean? = null,
+    onKeyRowChoice: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val ime = LocalSoftwareKeyboardController.current
@@ -178,6 +186,7 @@ internal fun TermScreen(
     // A desk keyboard brings its own Escape, Ctrl, Tab and arrows, so the key row only takes room.
     val configuration = LocalConfiguration.current
     val hardKeyboard = hasHardKeyboard(configuration.keyboard, configuration.hardKeyboardHidden)
+    val keyRowShown = keyRowShown(keyRowChoice, hardKeyboard)
 
     // The phone keyboard covers the pane instead of shrinking it: a smaller pane would be a resize
     // on the desktop, and a redraw of the program in it, every time the keyboard comes or goes. So
@@ -262,6 +271,7 @@ internal fun TermScreen(
             onNavigate = { if (view != null) sheet = Sheet.Navigator },
             onHolder = { if (state.owning) onAct { releasePane() } else onAct { takeOver() } },
             onMore = { sheet = Sheet.Actions },
+            onShowKeys = if (keyRowShown) null else { { onKeyRowChoice(true) } },
             compact = compact,
         )
         TermBanner(state, onRetry = onRetry, onDismiss = onDismissNotice)
@@ -320,7 +330,9 @@ internal fun TermScreen(
                     onRetry = onRetryUpload,
                 )
             }
-            if (!hardKeyboard) KeyBar(
+            // Shown or hidden at once rather than animated: each frame of a growing row would be one
+            // more resize of the pane on the desktop.
+            if (keyRowShown) KeyBar(
                 mods = mods,
                 busy = status?.state == "working" || status?.state == "blocked",
                 imeUp = imeShown(),
@@ -354,9 +366,14 @@ internal fun TermScreen(
                     }
                 }
             }
-            if (upload?.running != true) {
-                Group {
+            Group {
+                if (upload?.running != true) {
                     SheetItem(stringResource(R.string.upload_attach), icon = R.drawable.ic_attach_file) { filePicker.launch("*/*") }
+                }
+                if (keyRowShown) {
+                    SheetItem(stringResource(R.string.key_row_hide), icon = R.drawable.ic_keyboard_hide) { onKeyRowChoice(false) }
+                } else {
+                    SheetItem(stringResource(R.string.key_row_show), icon = R.drawable.ic_keyboard) { onKeyRowChoice(true) }
                 }
             }
             Group(stringResource(R.string.level_tab)) {
@@ -551,6 +568,8 @@ private fun SessionTopBar(
     onNavigate: () -> Unit,
     onHolder: () -> Unit,
     onMore: () -> Unit,
+    /** Brings the key row back; null while it is on screen. */
+    onShowKeys: (() -> Unit)?,
     compact: Boolean = false,
 ) {
     val title = when {
@@ -560,7 +579,7 @@ private fun SessionTopBar(
     }
     val path = state.pwd?.takeIf { it.isNotBlank() }?.let { shortPath(it) }
     if (compact) {
-        CompactTopBar(state, view, tab, status, title, path, onNavigate, onHolder, onMore)
+        CompactTopBar(state, view, tab, status, title, path, onNavigate, onHolder, onMore, onShowKeys)
         return
     }
     Row(
@@ -607,6 +626,7 @@ private fun SessionTopBar(
                 }
             }
         }
+        ShowKeysButton(onShowKeys, size = 40.dp, plate = Colors.key)
         if (state.phase == Phase.Live) {
             HolderChip(state.owning, onHolder)
             Spacer(Modifier.width(4.dp))
@@ -630,6 +650,7 @@ private fun CompactTopBar(
     onNavigate: () -> Unit,
     onHolder: () -> Unit,
     onMore: () -> Unit,
+    onShowKeys: (() -> Unit)?,
 ) {
     Row(
         Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 8.dp),
@@ -659,11 +680,35 @@ private fun CompactTopBar(
             Spacer(Modifier.width(8.dp))
             Dot(status?.let { statusTint(it) } ?: phaseTint(state.phase), 6.dp)
         }
+        ShowKeysButton(onShowKeys, size = 36.dp)
         if (state.phase == Phase.Live) {
             HolderChip(state.owning, onHolder, height = 32.dp)
             Spacer(Modifier.width(4.dp))
         }
         RoundButton(R.drawable.ic_more, stringResource(R.string.action_more), onMore, tint = Colors.muted, size = 36.dp, iconSize = 20.dp)
+    }
+}
+
+/** The way back to a hidden key row, which comes in where it can be seen while the row is gone. */
+@Composable
+private fun ShowKeysButton(onShowKeys: (() -> Unit)?, size: androidx.compose.ui.unit.Dp, plate: Color? = null) {
+    AnimatedVisibility(
+        visible = onShowKeys != null,
+        enter = fadeIn() + scaleIn(initialScale = 0.6f),
+        exit = fadeOut() + scaleOut(targetScale = 0.6f),
+    ) {
+        Row {
+            RoundButton(
+                R.drawable.ic_keyboard,
+                stringResource(R.string.key_row_show),
+                { onShowKeys?.invoke() },
+                plate = plate,
+                tint = if (plate == null) Colors.muted else Colors.ink,
+                size = size,
+                iconSize = if (size < 40.dp) 20.dp else 22.dp,
+            )
+            Spacer(Modifier.width(4.dp))
+        }
     }
 }
 
@@ -929,6 +974,9 @@ private val KEY_BAR_MAX_WIDTH = 720.dp
  */
 internal fun paneShift(caretBottom: Int, paneHeight: Int, covered: Int): Int =
     (caretBottom - (paneHeight - covered)).coerceIn(0, covered.coerceAtLeast(0))
+
+/** The person's own choice wins; left alone, the key row gives way to a desk keyboard. */
+internal fun keyRowShown(choice: Boolean?, hardKeyboard: Boolean): Boolean = choice ?: !hardKeyboard
 
 /** A desk keyboard is plugged in and open, from the activity's configuration. */
 internal fun hasHardKeyboard(keyboard: Int, hardKeyboardHidden: Int): Boolean =

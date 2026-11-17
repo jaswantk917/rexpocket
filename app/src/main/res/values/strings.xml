@@ -187,6 +187,8 @@
     <string name="key_arrows">Arrow keys</string>
     <string name="arrows_pinned">Pinned</string>
     <string name="key_keyboard">Keyboard</string>
+    <string name="key_row_hide">Hide keys</string>
+    <string name="key_row_show">Show keys</string>
     <string name="error_operation_failed">Operation failed</string>
     <string name="state_folded">Folded</string>
     <string name="filter_on">On</string>
