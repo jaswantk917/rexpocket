@@ -14,7 +14,12 @@ class FontFilesTest {
     private val assets = contents.map { (name, body) ->
         FontAsset(name, MessageDigest.getInstance("SHA-256").digest(body.toByteArray()).joinToString("") { "%02x".format(it) })
     }
-    private fun store() = FontFiles(temp.root, assets)
+    private val family = TerminalFamily(
+        id = "test", label = "Test Mono", directory = "jetbrains-mono-v1", source = "https://example.invalid",
+        regular = "regular.ttf", bold = "bold.ttf", italic = "regular.ttf", boldItalic = "bold.ttf",
+        assets = assets, maxFileBytes = 1_048_576L, size = "1 KB",
+    )
+    private fun store() = FontFiles(temp.root, family)
     private fun fetch(asset: FontAsset, file: File) { file.writeText(contents.getValue(asset.name)) }
 
     @Test fun completeFamilyIsVerifiedAndReusedOffline() {

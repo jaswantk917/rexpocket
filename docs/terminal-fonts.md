@@ -1,12 +1,23 @@
 # Terminal fonts
 
-Open the home screen's Settings → Terminal font to choose system monospace or JetBrains Mono. The default remains system monospace. Only terminal output changes; the rest of the app uses its existing UI fonts.
+Open the home screen's Settings → Terminal font to choose system monospace or a downloadable family. The default remains system monospace. Only terminal output changes; the rest of the app uses its existing UI fonts.
 
-Selecting JetBrains Mono downloads its regular, bold, italic and bold italic faces once, about 1.1 MB in total. Downloads come directly from the JetBrains Mono repository on GitHub at a pinned commit, with a SHA-256 check for each file. No font binaries are bundled in the APK. The SIL Open Font License is included in `app/src/main/assets/licenses/JetBrainsMono-OFL.txt`.
+| Family | Download | Licence (in `app/src/main/assets/licenses/`) |
+|---|---|---|
+| JetBrains Mono | 1.1 MB | `JetBrainsMono-OFL.txt` |
+| Meslo LG NF (Menlo's open-source twin, Nerd Font icons, powerlevel10k's build) | 10 MB | `MesloLGS-Apache.txt` |
+| Hack | 1.2 MB | `Hack-MIT.txt` |
+| IBM Plex Mono | 0.7 MB | `IBMPlexMono-OFL.txt` |
+| Source Code Pro | 0.75 MB | `SourceCodePro-OFL.txt` |
+| Ubuntu Mono | 0.8 MB | `UbuntuMono-UFL.txt` |
 
-The complete verified family is saved in private application files and the selection in preferences. After downloading, it works offline, including after restarting the app or switching to system monospace and back. A failed or incomplete download keeps the previous selection; tap JetBrains Mono again to retry. Network access to GitHub is needed for the first download.
+Selecting a family downloads its regular, bold, italic and bold italic faces once. Downloads come directly from the family's own repository on GitHub at a pinned commit, with a SHA-256 check for each file (`TERMINAL_FAMILIES` in `data/TerminalFamilies.kt`). No font binaries are bundled in the APK. Each family saves into its own directory; JetBrains Mono keeps `jetbrains-mono-v1`, the directory of the single-font version, and the old `downloaded_font` preference is read as JetBrains Mono.
 
-On Android 10+, a custom font family supplies all four styles with the same ASCII advance (0.6 em). Android 8–9 uses the downloaded regular face with synthetic styles. JetBrains Mono does not include Chinese glyphs; CJK continues to use Android font fallback.
+Menlo itself is Apple's and cannot be redistributed; Meslo is its Apache-licensed derivative. Fira Code no longer keeps TTFs in its repository, so it is not offered.
+
+The complete verified family is saved in private application files and the selection in preferences. After downloading, it works offline, including after restarting the app or switching to system monospace and back. A failed or incomplete download keeps the previous selection; tap the family again to retry. The picker previews every family already on the phone in its own face. Network access to GitHub is needed for the first download.
+
+On Android 10+, a custom font family supplies all four styles with the same ASCII advance (0.6 em). Android 8–9 uses the downloaded regular face with synthetic styles. None of the families include Chinese glyphs; CJK continues to use Android font fallback.
 
 ## Why offer a separate monospace font?
 
