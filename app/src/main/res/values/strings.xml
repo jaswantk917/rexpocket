@@ -190,6 +190,12 @@
     <string name="key_row_hide">Hide keys</string>
     <string name="key_row_show">Show keys</string>
     <string name="sidebar_toggle">Sidebar</string>
+    <string name="shortcut_group">Terminal</string>
+    <string name="shortcut_next_tab">Next tab</string>
+    <string name="shortcut_previous_tab">Previous tab</string>
+    <string name="shortcut_bigger">Larger text</string>
+    <string name="shortcut_smaller">Smaller text</string>
+    <string name="shortcut_default_size">Default text size</string>
     <string name="error_operation_failed">Operation failed</string>
     <string name="state_folded">Folded</string>
     <string name="filter_on">On</string>

@@ -27,8 +27,8 @@ internal class TerminalImeView(context: Context) : View(context) {
     /** The pane what is typed is sent to, once the terminal has one. */
     var pane: TerminalView? = null
 
-    /** Ctrl+Shift+V on a hardware keyboard, which pastes as it does in a desk terminal. */
-    var onPaste: (() -> Unit)? = null
+    /** Offered each key press first; true when the screen took it as a shortcut (see [TerminalShortcut]). */
+    var onShortcut: ((KeyEvent) -> Boolean)? = null
 
     /** How long after [showIme] a focus change still counts as the keyboard being wanted. */
     private var requestedUntil = 0L
@@ -77,10 +77,8 @@ internal class TerminalImeView(context: Context) : View(context) {
 
     /** Keys reach the pane as they did when the pane itself held the keyboard. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_V && event.isCtrlPressed && event.isShiftPressed) {
-            onPaste?.invoke()
-            return true
-        }
+        // Held down, a shortcut runs once: two new tabs from one long press would be a surprise.
+        if (onShortcut?.invoke(event) == true) return true
         return pane?.onKeyDown(keyCode, event) == true
     }
 

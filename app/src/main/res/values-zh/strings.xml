@@ -187,6 +187,12 @@
     <string name="key_row_hide">隐藏按键栏</string>
     <string name="key_row_show">显示按键栏</string>
     <string name="sidebar_toggle">侧边栏</string>
+    <string name="shortcut_group">终端</string>
+    <string name="shortcut_next_tab">下一个标签页</string>
+    <string name="shortcut_previous_tab">上一个标签页</string>
+    <string name="shortcut_bigger">放大文字</string>
+    <string name="shortcut_smaller">缩小文字</string>
+    <string name="shortcut_default_size">默认文字大小</string>
     <string name="error_operation_failed">操作失败</string>
     <string name="state_folded">已折叠</string>
     <string name="filter_on">开</string>

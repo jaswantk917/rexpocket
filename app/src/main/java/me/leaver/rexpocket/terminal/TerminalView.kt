@@ -18,6 +18,7 @@ import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
+import android.view.PointerIcon
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.widget.OverScroller
@@ -745,6 +746,10 @@ internal class TerminalView(context: Context) : View(context) {
         composing = text
         invalidate()
     }
+
+    // Over the pane a mouse shows the text beam: it selects text here, as in a desk terminal.
+    override fun onResolvePointerIcon(event: MotionEvent, pointerIndex: Int): PointerIcon =
+        PointerIcon.getSystemIcon(context, PointerIcon.TYPE_TEXT)
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val active = session ?: return false

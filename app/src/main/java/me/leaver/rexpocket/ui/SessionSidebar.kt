@@ -4,6 +4,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.hoverable
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.size
@@ -164,6 +166,7 @@ private fun SidebarRow(
     Row(
         Modifier.fillMaxWidth().height(ROW).clip(RoundedCornerShape(10.dp)).background(plate)
             .clickable(role = Role.Tab, onClick = onClick)
+            .pointerHoverIcon(PointerIcon.Hand)
             .semantics { this.selected = selected }
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
