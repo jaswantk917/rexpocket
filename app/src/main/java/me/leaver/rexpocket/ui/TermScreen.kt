@@ -263,9 +263,14 @@ internal fun TermScreen(
         }
     }
 
+    // Keys arrived from a keyboard: from then on a newly shown pane takes the focus, so Ctrl+Tab
+    // twice, or typing straight after it, does not need a click on the new pane first.
+    var keysTyped by remember { mutableStateOf(false) }
+
     // Set on every composition, so a shortcut always acts on the tabs and size on screen now.
     SideEffect {
         keyboard?.onShortcut = { event ->
+            keysTyped = true
             val shortcut = terminalShortcut(event.keyCode, event.isCtrlPressed, event.isShiftPressed, event.isAltPressed, event.isMetaPressed)
             if (shortcut != null && event.repeatCount == 0) run(shortcut)
             shortcut != null
@@ -274,7 +279,7 @@ internal fun TermScreen(
 
     // With a desk keyboard, typing goes to the pane from the start, without a tap to focus it.
     LaunchedEffect(keyboard, hardKeyboard) {
-        if (hardKeyboard) keyboard?.requestFocus()
+        if (hardKeyboard || keysTyped) keyboard?.requestFocus()
     }
 
     // An open sheet handles Back itself and closes.

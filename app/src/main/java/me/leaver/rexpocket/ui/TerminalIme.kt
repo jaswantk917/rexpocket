@@ -145,13 +145,15 @@ internal class TerminalImeView(context: Context) : View(context) {
             return true
         }
 
+        // A desk keyboard's keys can come this way too, handed on by the keyboard app, so they take
+        // the same road as the view's own: shortcuts first, then the pane.
         override fun sendKeyEvent(event: KeyEvent?): Boolean {
             if (event == null) return false
             return if (event.action == KeyEvent.ACTION_DOWN) {
-                pane?.onKeyDown(event.keyCode, event)
+                onKeyDown(event.keyCode, event)
             } else {
-                pane?.onKeyUp(event.keyCode, event)
-            } == true
+                onKeyUp(event.keyCode, event)
+            }
         }
 
         override fun performEditorAction(actionCode: Int): Boolean {

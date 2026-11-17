@@ -73,6 +73,9 @@ internal fun RoundButton(
         positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
         tooltip = { PlainTooltip { Text(spoken) } },
         state = rememberTooltipState(),
+        // Not focusable: a focusable tooltip is its own window, which takes the keyboard from the
+        // pane while the pointer rests on a button, then hides because it lost the hover, and back.
+        focusable = false,
         enableUserInput = onLongClick == null,
     ) {
         Box(
