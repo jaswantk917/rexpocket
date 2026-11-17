@@ -70,6 +70,8 @@ internal fun TerminalPane(
     onKeyboard: (TerminalImeView?) -> Unit = {},
     /** A horizontal swipe across the pane: forward means towards the next pane. */
     onSwipe: ((forward: Boolean) -> Unit)? = null,
+    /** Where the row being typed on ends, in pixels from the top of the pane. */
+    onCaretBottom: (Int) -> Unit = {},
     onError: (Exception) -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -84,6 +86,7 @@ internal fun TerminalPane(
     val currentSwipe = rememberUpdatedState(onSwipe)
     val currentKeyboard = rememberUpdatedState(onKeyboard)
     val currentFont = rememberUpdatedState(onFont)
+    val currentCaret = rememberUpdatedState(onCaretBottom)
     val input = remember { InputBatcher { bytes -> currentInput.value(bytes) } }
 
     LaunchedEffect(blockId, attempt) {
@@ -138,6 +141,7 @@ internal fun TerminalPane(
             // A horizontal swipe moves between the panes of a split, which is what the dots under
             // the card promise. Vertical drags stay the pane's own: history, or the program's wheel.
             view.onSwipe = { forward -> currentSwipe.value?.invoke(forward) }
+            view.onCaretBottom = { currentCaret.value(it) }
         }
     }
     // A tap on the pane is a tap on its text: it raises the keyboard, which the pane never asks for

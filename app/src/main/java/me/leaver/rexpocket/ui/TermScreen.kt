@@ -19,9 +19,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -36,14 +38,20 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -53,6 +61,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -145,6 +154,8 @@ internal fun TermScreen(
     onCancelUpload: () -> Unit,
     onDismissUpload: () -> Unit,
     onRetryUpload: () -> Unit,
+    /** Beside the session sidebar of a wide window: a one-line title bar, and no way back to draw. */
+    compact: Boolean = false,
 ) {
     val context = LocalContext.current
     val ime = LocalSoftwareKeyboardController.current
@@ -164,6 +175,27 @@ internal fun TermScreen(
     val focused = view?.focusedBlock()
     val status = focused?.let { state.blockStatus[it.id] }
     val panes = tab?.blocks.orEmpty()
+    // A desk keyboard brings its own Escape, Ctrl, Tab and arrows, so the key row only takes room.
+    val configuration = LocalConfiguration.current
+    val hardKeyboard = hasHardKeyboard(configuration.keyboard, configuration.hardKeyboardHidden)
+
+    // The phone keyboard covers the pane instead of shrinking it: a smaller pane would be a resize
+    // on the desktop, and a redraw of the program in it, every time the keyboard comes or goes. So
+    // the pane keeps its size, the controls ride up on the keyboard, and the pane slides up only as
+    // far as it takes to keep the row being typed on in sight. Both follow the keyboard's own
+    // animation, read at placement, so nothing is measured again while it moves.
+    val density = LocalDensity.current
+    val imeInsets = WindowInsets.ime
+    val navInsets = WindowInsets.navigationBars
+    val lift = { (imeInsets.getBottom(density) - navInsets.getBottom(density)).coerceAtLeast(0) }
+    var paneHeight by remember { mutableIntStateOf(0) }
+    var caretBottom by remember { mutableIntStateOf(0) }
+    val paneShift = { paneShift(caretBottom, paneHeight, covered = lift()) }
+
+    fun pasteClipboard() {
+        val text = clipboard(context)
+        if (text.isNullOrEmpty()) toast(context, context.getString(R.string.toast_clipboard_empty)) else onAct { paste(text) }
+    }
 
     /** Sends a key with the modifiers the key row holds; the ones on for one key are then used up. */
     fun press(key: KeyPress, own: String = "") {
@@ -200,6 +232,12 @@ internal fun TermScreen(
         }
     }
 
+    // With a desk keyboard, typing goes to the pane from the start, without a tap to focus it.
+    LaunchedEffect(keyboard, hardKeyboard) {
+        keyboard?.onPaste = ::pasteClipboard
+        if (hardKeyboard) keyboard?.requestFocus()
+    }
+
     // An open sheet handles Back itself and closes.
     BackHandler(onBack = onBack)
 
@@ -214,7 +252,7 @@ internal fun TermScreen(
 
     // One paper for the whole screen, the terminal's: the top bar and the dock float on it, as they
     // do in the reference, instead of sitting on bands of a second grey.
-    Column(Modifier.fillMaxSize().background(Colors.terminal).statusBarsPadding().navigationBarsPadding().imePadding()) {
+    Column(Modifier.fillMaxSize().background(Colors.terminal).statusBarsPadding().navigationBarsPadding()) {
         SessionTopBar(
             state = state,
             view = view,
@@ -224,11 +262,12 @@ internal fun TermScreen(
             onNavigate = { if (view != null) sheet = Sheet.Navigator },
             onHolder = { if (state.owning) onAct { releasePane() } else onAct { takeOver() } },
             onMore = { sheet = Sheet.Actions },
+            compact = compact,
         )
         TermBanner(state, onRetry = onRetry, onDismiss = onDismissNotice)
         // The pane sits on its own paper: white in the day, the page at night, edge to edge, the
         // way a terminal fills the screen.
-        Box(Modifier.weight(1f).fillMaxWidth().background(Colors.terminal)) {
+        Box(Modifier.weight(1f).fillMaxWidth().background(Colors.terminal).clipToBounds().onSizeChanged { paneHeight = it.height }) {
             val shown = focused?.id
             key(shown) {
                 TerminalPane(
@@ -252,43 +291,48 @@ internal fun TermScreen(
                             if (next != index) onAct { focusBlock(panes[next].id) }
                         }
                     },
+                    onCaretBottom = { caretBottom = it },
                     onError = { onAct { note(it.toProblem()) } },
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 2.dp),
+                    modifier = Modifier.fillMaxSize().offset { IntOffset(0, -paneShift()) }.padding(horizontal = 3.dp, vertical = 2.dp),
                 )
             }
         }
-        if (panes.size > 1) {
-            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
-                PaneBar(
-                    tab = tab,
-                    focused = focused,
-                    status = state.blockStatus,
-                    programs = state.programs,
-                    onSelect = { block -> onAct { focusBlock(block.id) } },
+        Column(
+            Modifier.fillMaxWidth().offset { IntOffset(0, -lift()) }.background(Colors.terminal),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (panes.size > 1) {
+                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
+                    PaneBar(
+                        tab = tab,
+                        focused = focused,
+                        status = state.blockStatus,
+                        programs = state.programs,
+                        onSelect = { block -> onAct { focusBlock(block.id) } },
+                    )
+                }
+            }
+            upload?.let {
+                UploadPill(
+                    status = it,
+                    onCancel = onCancelUpload,
+                    onDismiss = onDismissUpload,
+                    onRetry = onRetryUpload,
                 )
             }
-        }
-        upload?.let {
-            UploadPill(
-                status = it,
-                onCancel = onCancelUpload,
-                onDismiss = onDismissUpload,
-                onRetry = onRetryUpload,
+            if (!hardKeyboard) KeyBar(
+                mods = mods,
+                busy = status?.state == "working" || status?.state == "blocked",
+                imeUp = imeShown(),
+                onMod = { mods = mods.tap(it, SystemClock.uptimeMillis()) },
+                onKey = { key, own -> press(key, own) },
+                onNewLine = { press(KeyPress("enter", 0), "shift") },
+                onPaste = ::pasteClipboard,
+                onKeyboard = { toggleKeyboard() },
+                // On a tablet or a desktop window the row stays the width of a hand, not of the screen.
+                modifier = Modifier.widthIn(max = KEY_BAR_MAX_WIDTH),
             )
         }
-        KeyBar(
-            mods = mods,
-            busy = status?.state == "working" || status?.state == "blocked",
-            imeUp = imeShown(),
-            onMod = { mods = mods.tap(it, SystemClock.uptimeMillis()) },
-            onKey = { key, own -> press(key, own) },
-            onNewLine = { press(KeyPress("enter", 0), "shift") },
-            onPaste = {
-                val text = clipboard(context)
-                if (text.isNullOrEmpty()) toast(context, context.getString(R.string.toast_clipboard_empty)) else onAct { paste(text) }
-            },
-            onKeyboard = { toggleKeyboard() },
-        )
     }
 
     when (val open = sheet) {
@@ -507,6 +551,7 @@ private fun SessionTopBar(
     onNavigate: () -> Unit,
     onHolder: () -> Unit,
     onMore: () -> Unit,
+    compact: Boolean = false,
 ) {
     val title = when {
         view == null -> state.endpointLabel.ifBlank { stringResource(R.string.app_name) }
@@ -514,6 +559,10 @@ private fun SessionTopBar(
         else -> view.label
     }
     val path = state.pwd?.takeIf { it.isNotBlank() }?.let { shortPath(it) }
+    if (compact) {
+        CompactTopBar(state, view, tab, status, title, path, onNavigate, onHolder, onMore)
+        return
+    }
     Row(
         Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -567,16 +616,68 @@ private fun SessionTopBar(
 }
 
 /**
+ * The title bar beside the sidebar, one line as on the Rex desktop app: the sidebar already names
+ * the host and session, so this says only what runs here and where, and keeps the holder and menu.
+ */
+@Composable
+private fun CompactTopBar(
+    state: PocketState,
+    view: SessionView?,
+    tab: WindowInfo?,
+    status: ProgramRecord?,
+    title: String,
+    path: String?,
+    onNavigate: () -> Unit,
+    onHolder: () -> Unit,
+    onMore: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(Radius.chip))
+                .clickable(enabled = view != null, role = Role.Button, onClickLabel = stringResource(R.string.menu_navigate), onClick = onNavigate)
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ProgramTile(tab?.focusedBlock()?.id?.let { state.programs[it] }, size = 24.dp)
+            Spacer(Modifier.width(10.dp))
+            Text(
+                title,
+                color = Colors.ink,
+                fontSize = TextStyles.subhead,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (path != null) {
+                Spacer(Modifier.width(8.dp))
+                Text(path, color = Colors.muted, fontSize = TextStyles.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.width(8.dp))
+            Dot(status?.let { statusTint(it) } ?: phaseTint(state.phase), 6.dp)
+        }
+        if (state.phase == Phase.Live) {
+            HolderChip(state.owning, onHolder, height = 32.dp)
+            Spacer(Modifier.width(4.dp))
+        }
+        RoundButton(R.drawable.ic_more, stringResource(R.string.action_more), onMore, tint = Colors.muted, size = 36.dp, iconSize = 20.dp)
+    }
+}
+
+/**
  * Who holds the pane, and the one tap that changes it. While the desk holds it the chip is the
  * action colour and says "Take over"; while this phone does it is quiet and says so, and tapping
  * it hands the pane back. The pane has the holder's size, so this is what decides how it looks.
  */
 @Composable
-private fun HolderChip(owning: Boolean, onClick: () -> Unit) {
+private fun HolderChip(owning: Boolean, onClick: () -> Unit, height: androidx.compose.ui.unit.Dp = 40.dp) {
     val label = stringResource(if (owning) R.string.holder_phone else R.string.action_take_over)
     val action = stringResource(if (owning) R.string.action_release else R.string.action_take_over)
     Box(
-        Modifier.height(40.dp).clip(RoundedCornerShape(50))
+        Modifier.height(height).clip(RoundedCornerShape(50))
             .background(if (owning) Colors.key else Colors.accent)
             .clickable(role = Role.Button, onClickLabel = action, onClick = onClick)
             .padding(horizontal = 14.dp),
@@ -819,6 +920,19 @@ internal fun shortPath(path: String): String {
     val segments = short.split('/').filter { it.isNotEmpty() }
     return "…/" + segments.last()
 }
+
+private val KEY_BAR_MAX_WIDTH = 720.dp
+
+/**
+ * How far the pane slides up when the keyboard covers [covered] pixels of its foot: only as far as
+ * keeps the caret row in sight, and never further than the keyboard reaches.
+ */
+internal fun paneShift(caretBottom: Int, paneHeight: Int, covered: Int): Int =
+    (caretBottom - (paneHeight - covered)).coerceIn(0, covered.coerceAtLeast(0))
+
+/** A desk keyboard is plugged in and open, from the activity's configuration. */
+internal fun hasHardKeyboard(keyboard: Int, hardKeyboardHidden: Int): Boolean =
+    keyboard == Configuration.KEYBOARD_QWERTY && hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
 
 /** How long a failed action stays on the terminal screen. */
 internal const val NOTICE_MS = 4_000L

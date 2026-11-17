@@ -2,11 +2,19 @@ package me.leaver.rexpocket.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -79,37 +87,41 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
         openLink(context, authUrl)
     }
     RexTheme {
-        Box(Modifier.fillMaxSize().background(Colors.bg)) {
-            when (route) {
-                Route.Home -> HomeScreen(
-                    hosts = hosts,
-                    connected = model.host,
-                    state = pocket,
-                    tailscale = tailscale,
-                    tailscaleStatus = tailscaleStatus,
-                    tailnetError = tailnetError,
-                    tailnetPath = tailnetPath,
-                    opening = opening,
-                    cachedSessions = model::cachedSessions,
-                    onConnect = { model.connect(it) },
-                    onOpenSession = model::openSessionOn,
-                    onOpenTab = model::openTabOn,
-                    onNewSession = model::createSessionOn,
-                    onNewTab = model::newTabOn,
-                    onDisconnect = model::disconnect,
-                    onRetry = model::retryNow,
-                    onProbePath = model::probeTailnetPath,
-                    onSave = model::saveHost,
-                    onDelete = model::deleteHost,
-                    onTailscale = { tailscaleOpen = true },
-                    alerts = alerts,
-                    onAlerts = model::setAlerts,
-                    onFontSettings = { fontSettingsOpen = true },
-                    onDiagnosticsReport = { limit -> model.diagnosticReport(limit) },
-                    update = update,
-                    onUpdate = { updateTapped(update) },
-                )
-                Route.Term -> TermScreen(
+        val home = @Composable {
+            HomeScreen(
+                hosts = hosts,
+                connected = model.host,
+                state = pocket,
+                tailscale = tailscale,
+                tailscaleStatus = tailscaleStatus,
+                tailnetError = tailnetError,
+                tailnetPath = tailnetPath,
+                opening = opening,
+                cachedSessions = model::cachedSessions,
+                onConnect = { model.connect(it) },
+                onOpenSession = model::openSessionOn,
+                onOpenTab = model::openTabOn,
+                onNewSession = model::createSessionOn,
+                onNewTab = model::newTabOn,
+                onDisconnect = model::disconnect,
+                onRetry = model::retryNow,
+                onProbePath = model::probeTailnetPath,
+                onSave = model::saveHost,
+                onDelete = model::deleteHost,
+                onTailscale = { tailscaleOpen = true },
+                alerts = alerts,
+                onAlerts = model::setAlerts,
+                onFontSettings = { fontSettingsOpen = true },
+                onDiagnosticsReport = { limit -> model.diagnosticReport(limit) },
+                update = update,
+                onUpdate = { updateTapped(update) },
+            )
+        }
+        // Movable, so the terminal keeps its stream when a desktop window is resized across the width
+        // that adds the sidebar.
+        val term = remember {
+            movableContentOf { compact: Boolean ->
+                TermScreen(
                     state = pocket,
                     fontScale = font,
                     terminalTypeface = terminalTypeface,
@@ -125,7 +137,34 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     onCancelUpload = model::cancelUpload,
                     onDismissUpload = model::dismissUpload,
                     onRetryUpload = model::retryUpload,
+                    compact = compact,
                 )
+            }
+        }
+        BoxWithConstraints(Modifier.fillMaxSize().background(Colors.bg)) {
+            when {
+                // A tablet, an unfolded phone or a desktop window: the sessions stay beside the
+                // terminal, so another tab is one tap away instead of a trip back to the list.
+                route == Route.Term && maxWidth >= TWO_PANE_MIN_WIDTH -> Row(Modifier.fillMaxSize()) {
+                    val host = model.host
+                    SessionSidebar(
+                        state = pocket,
+                        hostLabel = host?.label.orEmpty(),
+                        onHosts = model::showHome,
+                        onOpenTab = { session, window -> if (host != null) model.openTabOn(host, session, window) },
+                        onOpenSession = model::openSession,
+                        onNewTab = { session -> if (host != null) model.newTabOn(host, session) },
+                        onNewSession = { model.createSession() },
+                        modifier = Modifier.width(SIDE_PANE_WIDTH),
+                    )
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(Colors.line))
+                    Box(Modifier.weight(1f).fillMaxHeight()) { term(true) }
+                }
+                route == Route.Term -> term(false)
+                // The list keeps a readable width instead of stretching rows across the screen.
+                else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                    Box(Modifier.widthIn(max = LIST_MAX_WIDTH).fillMaxHeight()) { home() }
+                }
             }
         }
         val offered = update
@@ -216,3 +255,8 @@ private fun SshHostKeyDialog(
         },
     )
 }
+
+/** From this width on, the sessions and the terminal share the screen: Material's expanded class. */
+private val TWO_PANE_MIN_WIDTH = 840.dp
+private val SIDE_PANE_WIDTH = 280.dp
+private val LIST_MAX_WIDTH = 720.dp

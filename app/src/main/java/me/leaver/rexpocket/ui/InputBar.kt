@@ -103,12 +103,13 @@ internal fun KeyBar(
     onNewLine: () -> Unit,
     onPaste: () -> Unit,
     onKeyboard: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
     val scroll = rememberScrollState()
     val pill = RoundedCornerShape(50)
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(GROUP_GAP),
         verticalAlignment = Alignment.CenterVertically,
     ) {

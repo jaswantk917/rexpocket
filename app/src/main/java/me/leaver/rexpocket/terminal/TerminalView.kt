@@ -94,6 +94,13 @@ internal class TerminalView(context: Context) : View(context) {
     /** A horizontal swipe; true when it went towards the next pane. */
     var onSwipe: ((forward: Boolean) -> Unit)? = null
 
+    /**
+     * The bottom edge, in pixels from the top of the view, of the row being typed on: the cursor's,
+     * or the last row with text when the program hides its cursor. What the keyboard must not cover.
+     */
+    var onCaretBottom: ((Int) -> Unit)? = null
+    private var caretBottom = -1
+
     private val regular = Paint(Paint.ANTI_ALIAS_FLAG).apply { isSubpixelText = true }
     private val bold = Paint(regular)
     private val italic = Paint(regular)
@@ -267,6 +274,22 @@ internal class TerminalView(context: Context) : View(context) {
         if (selection == null) drawCursor(canvas, frame)
         drawHandles(canvas)
         drawScrollbar(canvas, frame)
+        reportCaret(frame, rows)
+    }
+
+    private fun reportCaret(frame: TerminalFrame, rows: Int) {
+        val row = if (frame.cursorY in 0 until rows && frame.cursorX >= 0) frame.cursorY else lastInkedRow(frame, rows)
+        val bottom = ceil((row + 1) * cellHeight).toInt()
+        if (bottom == caretBottom) return
+        caretBottom = bottom
+        onCaretBottom?.invoke(bottom)
+    }
+
+    private fun lastInkedRow(frame: TerminalFrame, rows: Int): Int {
+        for (row in rows - 1 downTo 0) {
+            for (column in 0 until frame.columns) if (!frame.isBlank(frame.index(column, row))) return row
+        }
+        return -1
     }
 
     /**

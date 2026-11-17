@@ -27,6 +27,9 @@ internal class TerminalImeView(context: Context) : View(context) {
     /** The pane what is typed is sent to, once the terminal has one. */
     var pane: TerminalView? = null
 
+    /** Ctrl+Shift+V on a hardware keyboard, which pastes as it does in a desk terminal. */
+    var onPaste: (() -> Unit)? = null
+
     /** How long after [showIme] a focus change still counts as the keyboard being wanted. */
     private var requestedUntil = 0L
 
@@ -73,7 +76,13 @@ internal class TerminalImeView(context: Context) : View(context) {
     }
 
     /** Keys reach the pane as they did when the pane itself held the keyboard. */
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = pane?.onKeyDown(keyCode, event) == true
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_V && event.isCtrlPressed && event.isShiftPressed) {
+            onPaste?.invoke()
+            return true
+        }
+        return pane?.onKeyDown(keyCode, event) == true
+    }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = pane?.onKeyUp(keyCode, event) == true
 
