@@ -341,6 +341,7 @@ internal fun TermScreen(
                 onNewLine = { press(KeyPress("enter", 0), "shift") },
                 onPaste = ::pasteClipboard,
                 onKeyboard = { toggleKeyboard() },
+                onHide = { onKeyRowChoice(false) },
                 // On a tablet or a desktop window the row stays the width of a hand, not of the screen.
                 modifier = Modifier.widthIn(max = KEY_BAR_MAX_WIDTH),
             )
