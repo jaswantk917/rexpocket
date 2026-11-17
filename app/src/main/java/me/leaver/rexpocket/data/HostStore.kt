@@ -151,10 +151,15 @@ class HostStore(context: Context) {
 
     fun fontScale(): Float = prefs.getFloat(KEY_FONT, 1f)
 
-    fun downloadedFont(): Boolean = prefs.getBoolean("downloaded_font", false)
+    /**
+     * The terminal family the person chose, or null for the system's monospace. A phone that chose
+     * the one downloadable font of the first version ("downloaded_font") keeps JetBrains Mono.
+     */
+    fun terminalFont(): String? = prefs.getString("terminal_font", null)
+        ?: "jetbrains".takeIf { prefs.getBoolean("downloaded_font", false) }
 
-    fun setDownloadedFont(selected: Boolean) {
-        prefs.edit().putBoolean("downloaded_font", selected).apply()
+    fun setTerminalFont(id: String?) {
+        prefs.edit().putString("terminal_font", id).remove("downloaded_font").apply()
     }
 
     fun setFontScale(scale: Float) {
