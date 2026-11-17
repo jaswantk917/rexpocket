@@ -186,6 +186,7 @@
     <string name="key_keyboard">键盘</string>
     <string name="key_row_hide">隐藏按键栏</string>
     <string name="key_row_show">显示按键栏</string>
+    <string name="sidebar_toggle">侧边栏</string>
     <string name="error_operation_failed">操作失败</string>
     <string name="state_folded">已折叠</string>
     <string name="filter_on">开</string>

@@ -164,6 +164,8 @@ internal fun TermScreen(
     /** Whether the person showed (true) or hid (false) the key row; null leaves it to the keyboard. */
     keyRowChoice: Boolean? = null,
     onKeyRowChoice: (Boolean) -> Unit = {},
+    /** Opens or folds the sidebar beside a compact terminal; null where there is none. */
+    onToggleSidebar: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val ime = LocalSoftwareKeyboardController.current
@@ -272,6 +274,7 @@ internal fun TermScreen(
             onHolder = { if (state.owning) onAct { releasePane() } else onAct { takeOver() } },
             onMore = { sheet = Sheet.Actions },
             onShowKeys = if (keyRowShown) null else { { onKeyRowChoice(true) } },
+            onToggleSidebar = onToggleSidebar,
             compact = compact,
         )
         TermBanner(state, onRetry = onRetry, onDismiss = onDismissNotice)
@@ -571,6 +574,7 @@ private fun SessionTopBar(
     onMore: () -> Unit,
     /** Brings the key row back; null while it is on screen. */
     onShowKeys: (() -> Unit)?,
+    onToggleSidebar: (() -> Unit)? = null,
     compact: Boolean = false,
 ) {
     val title = when {
@@ -580,7 +584,7 @@ private fun SessionTopBar(
     }
     val path = state.pwd?.takeIf { it.isNotBlank() }?.let { shortPath(it) }
     if (compact) {
-        CompactTopBar(state, view, tab, status, title, path, onNavigate, onHolder, onMore, onShowKeys)
+        CompactTopBar(state, view, tab, status, title, path, onNavigate, onHolder, onMore, onShowKeys, onToggleSidebar)
         return
     }
     Row(
@@ -652,11 +656,16 @@ private fun CompactTopBar(
     onHolder: () -> Unit,
     onMore: () -> Unit,
     onShowKeys: (() -> Unit)?,
+    onToggleSidebar: (() -> Unit)?,
 ) {
     Row(
         Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // At the sidebar's edge, in the same place whether it is open or folded away.
+        if (onToggleSidebar != null) {
+            RoundButton(R.drawable.ic_sidebar, stringResource(R.string.sidebar_toggle), onToggleSidebar, tint = Colors.muted, size = 36.dp, iconSize = 20.dp)
+        }
         Row(
             Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(Radius.chip))
                 .clickable(enabled = view != null, role = Role.Button, onClickLabel = stringResource(R.string.menu_navigate), onClick = onNavigate)
@@ -669,7 +678,7 @@ private fun CompactTopBar(
                 title,
                 color = Colors.ink,
                 fontSize = TextStyles.subhead,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),

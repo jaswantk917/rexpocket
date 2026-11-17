@@ -1,6 +1,14 @@
 package me.leaver.rexpocket.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.remember
+import me.leaver.rexpocket.core.ProgramRecord
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -61,7 +69,7 @@ internal fun SessionSidebar(
                 hostLabel.ifBlank { state.endpointLabel },
                 color = Colors.ink,
                 fontSize = TextStyles.subhead,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
@@ -76,7 +84,7 @@ internal fun SessionSidebar(
                 val view = state.views[session.id]
                 val active = session.id == state.activeSessionId
                 item(key = "s-${session.id}") {
-                    SessionLabel(session.label, onNewTab = { onNewTab(session.id) })
+                    SessionLabel(session.label, always = active, onNewTab = { onNewTab(session.id) })
                 }
                 if (view == null) {
                     item(key = "o-${session.id}") {
@@ -84,7 +92,7 @@ internal fun SessionSidebar(
                             title = stringResource(R.string.session_open_to_load),
                             program = null,
                             selected = false,
-                            busy = false,
+                            status = null,
                             muted = true,
                             onClick = { onOpenSession(session.id) },
                         )
@@ -96,7 +104,7 @@ internal fun SessionSidebar(
                                 title = tabTitle(view, window, state),
                                 program = tabProgram(window, state),
                                 selected = active && window.id == state.view?.activeWindowId,
-                                busy = window.isBusy(state),
+                                status = window.activity(state),
                                 onClick = { onOpenTab(session.id, window.id) },
                             )
                         }
@@ -107,25 +115,39 @@ internal fun SessionSidebar(
     }
 }
 
-private fun WindowInfo.isBusy(state: PocketState): Boolean =
-    blocks.any { block -> state.blockStatus[block.id]?.state.let { it == "working" || it == "blocked" } }
+/** What a tab's programs are doing, the one waiting on a person first: that is the one to go to. */
+private fun WindowInfo.activity(state: PocketState): ProgramRecord? {
+    val records = blocks.mapNotNull { state.blockStatus[it.id] }
+    return records.firstOrNull { it.state == "blocked" } ?: records.firstOrNull { it.state == "working" }
+}
 
+/**
+ * A session's name over its tabs. Its new-tab button shows on the session on screen, and on the
+ * others while a pointer is over them, as on the desktop, instead of a column of plus signs.
+ */
 @Composable
-private fun SessionLabel(label: String, onNewTab: () -> Unit) {
+private fun SessionLabel(label: String, always: Boolean, onNewTab: () -> Unit) {
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
     Row(
-        Modifier.fillMaxWidth().padding(start = 12.dp, top = 12.dp),
+        Modifier.fillMaxWidth().hoverable(hover).padding(start = 12.dp, top = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             label,
             color = Colors.muted,
             fontSize = TextStyles.label,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        RoundButton(R.drawable.ic_add, stringResource(R.string.menu_new_tab), onNewTab, tint = Colors.muted, size = 32.dp, iconSize = 16.dp)
+        // The slot is kept while the button is away, so the label never shifts under the pointer.
+        Box(Modifier.size(32.dp)) {
+            androidx.compose.animation.AnimatedVisibility(visible = always || hovered, enter = fadeIn(), exit = fadeOut()) {
+                RoundButton(R.drawable.ic_add, stringResource(R.string.menu_new_tab), onNewTab, tint = Colors.muted, size = 32.dp, iconSize = 16.dp)
+            }
+        }
     }
 }
 
@@ -134,7 +156,7 @@ private fun SidebarRow(
     title: String,
     program: String?,
     selected: Boolean,
-    busy: Boolean,
+    status: ProgramRecord?,
     onClick: () -> Unit,
     muted: Boolean = false,
 ) {
@@ -149,7 +171,8 @@ private fun SidebarRow(
         if (program != null || !muted) {
             Box {
                 ProgramTile(program, size = 22.dp)
-                if (busy) Dot(Colors.accent, 7.dp, Modifier.align(Alignment.TopEnd), ring = Colors.bg)
+                // Green while it works, amber while it waits on you: the same colours as the title bar.
+                if (status != null) Dot(statusTint(status), 7.dp, Modifier.align(Alignment.TopEnd), ring = Colors.bg)
             }
             Spacer(Modifier.width(10.dp))
         }
@@ -157,7 +180,8 @@ private fun SidebarRow(
             title,
             color = if (muted) Colors.muted else Colors.ink,
             fontSize = TextStyles.subhead,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            // One weight for every row; the plate marks the tab on screen. A heavier one on top of
+            // the system's bold-text setting turns the selected row nearly black.
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

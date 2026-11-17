@@ -47,6 +47,7 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
     var fontSettingsOpen by remember { mutableStateOf(false) }
     // Kept above the terminal, so hiding the key row lasts across tabs and trips to the list.
     var keyRowChoice by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var sidebarOpen by rememberSaveable { mutableStateOf(true) }
     val tailscale by model.tailscale.collectAsState()
     val tailscaleStatus by model.tailscaleStatus.collectAsState()
     val tailnetError by model.tailnetError.collectAsState()
@@ -143,6 +144,8 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     compact = compact,
                     keyRowChoice = keyRowChoice,
                     onKeyRowChoice = { keyRowChoice = it },
+                    // Folding is instant: a sliding sidebar would resize the pane on every frame.
+                    onToggleSidebar = if (compact) { { sidebarOpen = !sidebarOpen } } else null,
                 )
             }
         }
@@ -150,6 +153,7 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
             when {
                 // A tablet, an unfolded phone or a desktop window: the sessions stay beside the
                 // terminal, so another tab is one tap away instead of a trip back to the list.
+                route == Route.Term && maxWidth >= TWO_PANE_MIN_WIDTH && !sidebarOpen -> term(true)
                 route == Route.Term && maxWidth >= TWO_PANE_MIN_WIDTH -> Row(Modifier.fillMaxSize()) {
                     val host = model.host
                     SessionSidebar(
