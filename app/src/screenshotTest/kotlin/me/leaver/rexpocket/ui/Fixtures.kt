@@ -14,7 +14,7 @@ import me.leaver.rexpocket.data.SavedHost
 /** The form factors the adaptive guidance names: phone, foldable, tablet, desktop; light and dark. */
 @Preview(name = "Phone", device = Devices.PHONE, showBackground = true)
 @Preview(name = "Phone dark", device = Devices.PHONE, showBackground = true, uiMode = 0x21)
-@Preview(name = "Phone 1.3", device = Devices.PHONE, showBackground = true, fontScale = 1.3f)
+@Preview(name = "Phone large text", device = Devices.PHONE, showBackground = true, fontScale = 1.3f)
 @Preview(name = "Foldable", device = Devices.FOLDABLE, showBackground = true)
 @Preview(name = "Tablet", device = Devices.TABLET, showBackground = true)
 @Preview(name = "Desktop", device = Devices.DESKTOP, showBackground = true)
