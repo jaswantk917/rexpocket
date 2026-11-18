@@ -6,6 +6,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -45,7 +53,7 @@ internal fun Glyph(@DrawableRes id: Int, tint: Color, modifier: Modifier = Modif
  * A round control: a [plate] of [size], the icon in it, and a touch target of at least 48 dp
  * however small the plate is drawn. Without a plate it is the platform's plain icon button.
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun RoundButton(
     @DrawableRes icon: Int,
@@ -59,14 +67,27 @@ internal fun RoundButton(
     enabled: Boolean = true,
     onLongClick: (() -> Unit)? = null,
 ) {
-    Box(
-        modifier.minimumInteractiveComponentSize().size(size).clip(CircleShape)
-            .then(if (plate != null) Modifier.background(plate) else Modifier)
-            .combinedClickable(enabled = enabled, role = Role.Button, onLongClick = onLongClick, onClick = onClick)
-            .semantics { contentDescription = spoken },
-        contentAlignment = Alignment.Center,
+    // An icon says less than a word: a pointer resting on it, or a long press, names it. A button
+    // that has its own long press keeps it, and its name stays with screen readers.
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = { PlainTooltip { Text(spoken) } },
+        state = rememberTooltipState(),
+        // Not focusable: a focusable tooltip is its own window, which takes the keyboard from the
+        // pane while the pointer rests on a button, then hides because it lost the hover, and back.
+        focusable = false,
+        enableUserInput = onLongClick == null,
     ) {
-        Glyph(icon, tint, size = iconSize)
+        Box(
+            modifier.minimumInteractiveComponentSize().size(size).clip(CircleShape)
+                .then(if (plate != null) Modifier.background(plate) else Modifier)
+                .combinedClickable(enabled = enabled, role = Role.Button, onLongClick = onLongClick, onClick = onClick)
+                .pointerHoverIcon(if (enabled) PointerIcon.Hand else PointerIcon.Default)
+                .semantics { contentDescription = spoken },
+            contentAlignment = Alignment.Center,
+        ) {
+            Glyph(icon, tint, size = iconSize)
+        }
     }
 }
 

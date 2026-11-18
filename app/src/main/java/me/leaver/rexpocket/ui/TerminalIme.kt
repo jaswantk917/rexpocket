@@ -27,6 +27,9 @@ internal class TerminalImeView(context: Context) : View(context) {
     /** The pane what is typed is sent to, once the terminal has one. */
     var pane: TerminalView? = null
 
+    /** The screen's keyboard shortcuts, which the pane offers each key press first. */
+    var onShortcut: ((KeyEvent) -> Boolean)? = null
+
     /** How long after [showIme] a focus change still counts as the keyboard being wanted. */
     private var requestedUntil = 0L
 

@@ -35,6 +35,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -217,6 +218,42 @@ internal fun TermScreen(
             target.clearFocus()
         } else {
             target.showIme()
+        }
+    }
+
+    fun run(shortcut: TerminalShortcut) {
+        val windows = view?.windows.orEmpty()
+        val at = windows.indexOfFirst { it.id == view?.activeWindowId }
+        fun goTo(index: Int) {
+            val target = windows.getOrNull(index) ?: return
+            if (target.id != view?.activeWindowId) onAct { focusWindow(target.id) }
+        }
+        when (shortcut) {
+            TerminalShortcut.NextTab -> if (windows.isNotEmpty()) goTo((at + 1).mod(windows.size))
+            TerminalShortcut.PreviousTab -> if (windows.isNotEmpty()) goTo((at - 1).mod(windows.size))
+            is TerminalShortcut.Tab -> goTo(shortcut.index)
+            TerminalShortcut.NewTab -> onAct { newWindow() }
+            TerminalShortcut.Paste -> pasteClipboard()
+            TerminalShortcut.Bigger -> onFont(stepFontScale(fontScale, bigger = true))
+            TerminalShortcut.Smaller -> onFont(stepFontScale(fontScale, bigger = false))
+            TerminalShortcut.DefaultSize -> onFont(1f)
+        }
+    }
+
+    // Keys arrived from a keyboard: from then on a newly shown pane takes the focus, so Ctrl+Tab
+    // twice, or typing straight after it, does not need a click on the new pane first.
+    var keysTyped by remember { mutableStateOf(false) }
+    LaunchedEffect(keyboard) {
+        if (keysTyped) keyboard?.requestFocus()
+    }
+
+    // Set on every composition, so a shortcut always acts on the tabs and size on screen now.
+    SideEffect {
+        keyboard?.onShortcut = { event ->
+            keysTyped = true
+            val shortcut = terminalShortcut(event.keyCode, event.isCtrlPressed, event.isShiftPressed, event.isAltPressed, event.isMetaPressed)
+            if (shortcut != null && event.repeatCount == 0) run(shortcut)
+            shortcut != null
         }
     }
 

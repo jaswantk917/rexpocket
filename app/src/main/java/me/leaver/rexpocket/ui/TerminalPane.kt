@@ -153,6 +153,7 @@ internal fun TerminalPane(
     SideEffect {
         keyboard.pane = pane
         pane.onTap = { keyboard.showIme() }
+        pane.onShortcut = { keyboard.onShortcut?.invoke(it) == true }
     }
     // Published before the terminal view exists, so the key row can raise the keyboard at once.
     LaunchedEffect(keyboard) { currentKeyboard.value(keyboard) }

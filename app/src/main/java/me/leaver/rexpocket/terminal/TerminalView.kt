@@ -18,6 +18,7 @@ import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
+import android.view.PointerIcon
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.widget.OverScroller
@@ -743,7 +744,18 @@ internal class TerminalView(context: Context) : View(context) {
         invalidate()
     }
 
+    // Over the pane a mouse shows the text beam: it selects text here, as in a desk terminal.
+    override fun onResolvePointerIcon(event: MotionEvent, pointerIndex: Int): PointerIcon =
+        PointerIcon.getSystemIcon(context, PointerIcon.TYPE_TEXT)
+
+    /**
+     * Offered each key press first, whichever view holds the focus: the screen's shortcuts (see
+     * TerminalShortcut). True when it took the key, which then never reaches the program.
+     */
+    var onShortcut: ((KeyEvent) -> Boolean)? = null
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (onShortcut?.invoke(event) == true) return true
         val active = session ?: return false
         if (event.isShiftPressed && (keyCode == KeyEvent.KEYCODE_PAGE_UP || keyCode == KeyEvent.KEYCODE_PAGE_DOWN)) {
             val rows = currentFrame()?.rows ?: return false
