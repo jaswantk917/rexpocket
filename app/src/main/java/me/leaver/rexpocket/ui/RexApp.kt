@@ -1,5 +1,11 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
+import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
+import androidx.compose.ui.platform.LocalDensity
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.ui.NavDisplay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -99,7 +105,6 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
     val appearance by model.appearance.collectAsState()
     RexTheme(appearance) {
         Box(Modifier.fillMaxSize().background(Colors.bg)) {
-            val window = windowSize()
             // A tablet or a desk window keeps the list beside the pane: a session or a tab is
             // switched without leaving the terminal it was showing. With nothing open, the pane
             // side says so and waits for a pick.
@@ -149,24 +154,40 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     onSettings = { settingsOpen = true },
                 )
             }
-            when (layoutFor(window, hasHosts = hosts.isNotEmpty(), terminalOpen = route == Route.Term)) {
-                WindowLayout.ListDetail -> BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val list = listPaneWidth(maxWidth)
-                    val open = route == Route.Term
-                    Row(Modifier.fillMaxSize()) {
-                        Box(Modifier.width(list).fillMaxHeight()) { home(open) }
-                        Box(Modifier.width(1.dp).fillMaxHeight().background(Colors.line))
-                        Box(Modifier.weight(1f).fillMaxHeight()) { if (open) term(true) else NoPaneOpen() }
-                    }
-                }
-                WindowLayout.CappedColumn -> BoxWithConstraints(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.TopCenter,
-                ) {
-                    Box(Modifier.width(minOf(maxWidth, COLUMN_MAX)).fillMaxHeight()) { home(false) }
-                }
-                WindowLayout.OneColumn -> if (route == Route.Term) term(false) else home(false)
+            // Navigation 3: the host list is the list pane and the terminal the detail pane, side by
+            // side when the window has room for both, one at a time when it does not. The back stack
+            // follows the model's route, which reconnects, alerts and a closed session also move.
+            val backStack = remember(route) {
+                if (route == Route.Term) listOf<NavKey>(HostsKey, TerminalKey) else listOf<NavKey>(HostsKey)
             }
+            val directive = rememberPaneDirective()
+            val twoPanes = directive.maxHorizontalPartitions > 1
+            val strategy = rememberListDetailSceneStrategy<NavKey>(directive = directive)
+            val slide = with(LocalDensity.current) { NAV_SLIDE.roundToPx() }
+            NavDisplay(
+                backStack = backStack,
+                onBack = { model.showHome() },
+                sceneStrategies = listOf(strategy),
+                transitionSpec = { navForward(slide) },
+                popTransitionSpec = { navBack(slide) },
+                predictivePopTransitionSpec = { navBack(slide) },
+                entryProvider = entryProvider {
+                    entry<HostsKey>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { NoPaneOpen() })) {
+                        if (twoPanes) {
+                            home(route == Route.Term)
+                        } else {
+                            // One column in a window too wide for one reads better held to a width.
+                            BoxWithConstraints(Modifier.fillMaxSize().background(Colors.bg), contentAlignment = Alignment.TopCenter) {
+                                Box(Modifier.width(minOf(maxWidth, COLUMN_MAX)).fillMaxHeight()) { home(false) }
+                            }
+                        }
+                    }
+                    entry<TerminalKey>(metadata = ListDetailSceneStrategy.detailPane()) {
+                        // Beside the list there is no back button: the list is the way back.
+                        term(twoPanes)
+                    }
+                },
+            )
         }
         val offered = update
         val offeredTag = when (offered) {

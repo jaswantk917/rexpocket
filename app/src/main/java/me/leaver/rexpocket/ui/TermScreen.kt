@@ -264,8 +264,6 @@ internal fun TermScreen(
         }
     }
 
-    // An open sheet handles Back itself and closes.
-    BackHandler(onBack = onBack)
 
     // The keyboard belongs to the pane that is on screen: leaving the terminal drops it, so the
     // session list does not come back with a keyboard over it.
