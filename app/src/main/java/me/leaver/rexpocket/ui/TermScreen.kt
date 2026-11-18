@@ -528,7 +528,6 @@ internal fun TermScreen(
         var text by remember(target) { mutableStateOf(target.current) }
         AlertDialog(
             onDismissRequest = { rename = null },
-            containerColor = Colors.surface,
             title = {
                 Text(
                     when (target.kind) {
@@ -563,7 +562,6 @@ internal fun TermScreen(
     confirm?.let { target ->
         AlertDialog(
             onDismissRequest = { confirm = null },
-            containerColor = Colors.surface,
             title = {
                 Text(
                     when (target.kind) {

@@ -277,4 +277,6 @@
     <string name="keybar_always_detail">Keep the key bar with a keyboard attached</string>
     <string name="alerts_detail">Tell me when an agent finishes or needs me</string>
     <string name="update_channel_detail">Preview gets new builds first</string>
+    <string name="field_show">Show</string>
+    <string name="field_hide">Hide</string>
 </resources>

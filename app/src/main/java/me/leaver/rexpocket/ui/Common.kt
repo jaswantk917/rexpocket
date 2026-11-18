@@ -1,5 +1,7 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -106,37 +108,35 @@ internal fun Field(
     LaunchedEffect(value) {
         if (field.text != value) field = TextFieldValue(value, TextRange(value.length))
     }
-    Column {
-        Text(hint, color = Colors.muted, fontSize = TextStyles.label)
-        // The placeholder is painted behind the field, which stays the thing that takes the tap.
-        Box(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-            if (placeholder != null && field.text.isEmpty()) {
-                Text(
-                    placeholder,
-                    color = Colors.muted,
-                    fontSize = TextStyles.body,
-                    maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 13.dp),
+    var reveal by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value = field,
+        onValueChange = {
+            field = it
+            onChange(it.text)
+        },
+        label = { Text(hint) },
+        placeholder = placeholder?.let { { Text(it, maxLines = 1) } },
+        singleLine = singleLine,
+        minLines = minLines,
+        shape = RoundedCornerShape(16.dp),
+        visualTransformation = if (password && !reveal) PasswordVisualTransformation() else VisualTransformation.None,
+        keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Text),
+        trailingIcon = if (password && singleLine) {
+            {
+                RoundButton(
+                    if (reveal) R.drawable.ic_eye_filled else R.drawable.ic_eye,
+                    stringResource(if (reveal) R.string.field_hide else R.string.field_show),
+                    { reveal = !reveal },
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    size = 40.dp,
                 )
             }
-            BasicTextField(
-                value = field,
-                onValueChange = {
-                    field = it
-                    onChange(it.text)
-                },
-                textStyle = TextStyle(color = Colors.ink, fontSize = TextStyles.body),
-                cursorBrush = SolidColor(Colors.accent),
-                singleLine = singleLine,
-                minLines = minLines,
-                visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-                keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Text),
-                modifier = Modifier.fillMaxWidth().border(1.dp, Colors.line, RoundedCornerShape(Radius.chip))
-                    .padding(horizontal = 12.dp, vertical = 12.dp)
-                    .focusRequester(focus),
-            )
-        }
-    }
+        } else {
+            null
+        },
+        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+    )
 }
 
 /**

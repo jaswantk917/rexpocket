@@ -273,4 +273,6 @@
     <string name="keybar_always_detail">连接键盘时仍显示按键栏</string>
     <string name="alerts_detail">智能体完成或需要我时通知</string>
     <string name="update_channel_detail">预览版更早收到新版本</string>
+    <string name="field_show">显示</string>
+    <string name="field_hide">隐藏</string>
 </resources>

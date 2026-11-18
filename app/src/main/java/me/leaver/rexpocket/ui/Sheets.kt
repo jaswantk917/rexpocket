@@ -1,5 +1,7 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -92,8 +94,8 @@ internal fun LinkSheet(url: String, onDismiss: () -> Unit, onOpen: () -> Unit, o
 internal class SheetScope(val close: (() -> Unit) -> Unit)
 
 /**
- * A bottom sheet in the app's colours: rows grouped on cards over the dark background, the same
- * look as the host and session lists.
+ * Android's modal bottom sheet in the scheme's low container: the platform's drag handle, an
+ * emphasized title, and rows in segmented groups - the same grammar as the host list and settings.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,27 +111,21 @@ internal fun ActionSheet(onDismiss: () -> Unit, title: String? = null, content: 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = state,
-        shape = RoundedCornerShape(topStart = Radius.sheet, topEnd = Radius.sheet),
-        containerColor = Colors.bg,
-        contentColor = Colors.ink,
-        scrimColor = Colors.scrim,
-        dragHandle = {
-            Box(Modifier.padding(top = 10.dp, bottom = 4.dp).size(width = 36.dp, height = 5.dp).clip(CircleShape).background(Colors.line))
-        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
-                .padding(bottom = 12.dp),
+                .padding(bottom = 16.dp),
         ) {
             if (title != null) {
                 Text(
                     title,
-                    color = Colors.ink,
-                    fontSize = TextStyles.title,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleLargeEmphasized,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 4.dp),
                 )
             }
             rows.content()
@@ -138,63 +134,34 @@ internal fun ActionSheet(onDismiss: () -> Unit, title: String? = null, content: 
 }
 
 /**
- * A card of rows, with an optional caption above it. The rows are separated by hairlines inset to
- * where their text starts, as the platform's grouped lists are: past the icon slot when the rows
- * have icons, at the margin when they do not.
+ * A segmented group of rows with an optional caption in the accent: rounded at its ends, the sheet
+ * showing through 2 dp gaps between rows, no hairlines.
  */
 @Composable
 internal fun SheetScope.Group(
     label: String? = null,
-    icons: Boolean = true,
+    @Suppress("UNUSED_PARAMETER") icons: Boolean = true,
     content: @Composable SheetScope.() -> Unit,
 ) {
     if (label != null) {
         Text(
             label,
-            color = Colors.muted,
-            fontSize = TextStyles.label,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(start = 16.dp, top = 18.dp, bottom = 8.dp),
+            style = MaterialTheme.typography.titleSmallEmphasized,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 8.dp, top = 20.dp, bottom = 8.dp),
         )
     } else {
         Spacer(Modifier.height(12.dp))
     }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(Colors.surface)) {
-        GroupRows(this@Group, if (icons) ICON_INSET else 16.dp, content)
-    }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) { content() }
 }
-
-/** Lays the rows of a group out with a hairline between each pair. */
-@Composable
-private fun GroupRows(scope: SheetScope, inset: Dp, content: @Composable SheetScope.() -> Unit) {
-    androidx.compose.ui.layout.SubcomposeLayout { constraints ->
-        val rows = subcompose("rows") { scope.content() }.map { it.measure(constraints.copy(minHeight = 0)) }
-        val line = 1.dp.roundToPx()
-        val height = rows.sumOf { it.height } + line * (rows.size - 1).coerceAtLeast(0)
-        val divider = subcompose("lines") {
-            repeat((rows.size - 1).coerceAtLeast(0)) { Box(Modifier.fillMaxWidth().height(1.dp).background(Colors.line)) }
-        }.map { it.measure(constraints.copy(minHeight = 0, minWidth = 0, maxWidth = constraints.maxWidth - inset.roundToPx())) }
-        layout(constraints.maxWidth, height) {
-            var y = 0
-            rows.forEachIndexed { i, row ->
-                if (i > 0) {
-                    divider[i - 1].place(inset.roundToPx(), y)
-                    y += line
-                }
-                row.place(0, y)
-                y += row.height
-            }
-        }
-    }
-}
-
-/** Where a row's text starts when it has an icon: the margin, the 24 dp slot and its gap. */
-private val ICON_INSET = 56.dp
 
 /**
- * One row of a sheet: an icon in a 24 dp slot, the label, a detail or a check at the end. The row is
- * 56 dp high, the platform's one-line list item. A group's rows either all have icons or none do,
- * so their labels share one keyline.
+ * One row of a sheet: an icon, the label, a detail or a check at the end, 56 dp high. The one that
+ * is current sits in the secondary container.
  *
  * A row that only changes what its own detail shows - a switch, a pick between two - stays open
  * ([keepOpen]): closing the sheet would take away the one place the change is visible.
@@ -209,20 +176,23 @@ internal fun SheetScope.SheetItem(
     keepOpen: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val ink = if (marked) scheme.onSecondaryContainer else color
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp)
-            .clickable { if (keepOpen) onClick() else close(onClick) }
+            .pressable(RoundedCornerShape(4.dp), onClick = { if (keepOpen) onClick() else close(onClick) })
+            .background(if (marked) scheme.secondaryContainer else scheme.surfaceContainerHigh)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            Glyph(icon, if (color == Colors.ink) Colors.muted else color, size = 24.dp)
+            Glyph(icon, if (color == Colors.ink) scheme.onSurfaceVariant else color, size = 24.dp)
             Spacer(Modifier.width(16.dp))
         }
         Text(
             label,
-            color = color,
-            fontSize = TextStyles.body,
+            style = MaterialTheme.typography.bodyLarge,
+            color = ink,
             fontWeight = if (marked) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -230,11 +200,11 @@ internal fun SheetScope.SheetItem(
         )
         if (detail != null) {
             Spacer(Modifier.width(12.dp))
-            Text(detail, color = Colors.muted, fontSize = TextStyles.label, maxLines = 1)
+            Text(detail, style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant, maxLines = 1)
         }
         if (marked) {
             Spacer(Modifier.width(12.dp))
-            Glyph(R.drawable.ic_check, Colors.accent, size = 20.dp)
+            Glyph(R.drawable.ic_check, scheme.onSecondaryContainer, size = 20.dp)
         }
     }
 }

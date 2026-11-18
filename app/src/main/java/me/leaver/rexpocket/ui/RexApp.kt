@@ -333,7 +333,6 @@ private fun SshHostKeyDialog(
 ) {
     AlertDialog(
         onDismissRequest = onCancel,
-        containerColor = Colors.surface,
         title = { Text(stringResource(R.string.ssh_host_key_title, host.label), color = Colors.ink) },
         text = {
             Text(

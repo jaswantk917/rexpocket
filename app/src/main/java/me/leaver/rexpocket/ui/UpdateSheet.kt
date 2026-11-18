@@ -33,7 +33,6 @@ internal fun UpdateOfferDialog(
 ) {
     AlertDialog(
         onDismissRequest = onLater,
-        containerColor = Colors.surface,
         title = {
             Text(
                 stringResource(if (downloaded) R.string.update_ready_title else R.string.update_available_title, tag),

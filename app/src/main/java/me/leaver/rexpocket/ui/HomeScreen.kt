@@ -1,5 +1,9 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.foundation.layout.FlowRow
 import me.leaver.rexpocket.data.TERMINAL_FAMILIES
 import me.leaver.rexpocket.data.TerminalFontState
 import me.leaver.rexpocket.data.Appearance
@@ -1006,7 +1010,6 @@ internal fun TailscaleDialog(
     val state = tailnetState(status)
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Colors.surface,
         title = { Text(stringResource(R.string.tailscale_title), color = Colors.ink) },
         text = {
             Column(
@@ -1149,7 +1152,6 @@ internal fun HostDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Colors.surface,
         title = {
             Text(
                 if (initial == null) stringResource(R.string.action_add_host) else stringResource(R.string.action_edit_host),
@@ -1172,15 +1174,16 @@ internal fun HostDialog(
                     placeholder = stringResource(R.string.field_address_placeholder),
                 ) { address = it }
                 if (parsed != null) {
-                    Text(
-                        listOfNotNull(
-                            if (ssh && user.isNotBlank()) "$user@${parsed.host}:${parsed.port}" else "${parsed.host}:${parsed.port}",
+                    // What the app made of the address, as chips: where, how, and through what.
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ParsedChip(if (ssh && user.isNotBlank()) "$user@${parsed.host}:${parsed.port}" else "${parsed.host}:${parsed.port}", R.drawable.ic_host)
+                        ParsedChip(
                             stringResource(if (ssh) R.string.host_transport_ssh else if (parsed.plaintext) R.string.host_transport_plain else R.string.host_transport_tls),
-                            stringResource(R.string.tailscale_title).takeIf { parsed.viaTailscale },
-                        ).joinToString(" · "),
-                        color = Colors.muted,
-                        fontSize = TextStyles.label,
-                    )
+                            R.drawable.ic_swap,
+                            warn = parsed.plaintext && !ssh,
+                        )
+                        if (parsed.viaTailscale) ParsedChip(stringResource(R.string.tailscale_title), R.drawable.ic_tailnet)
+                    }
                 } else {
                     // Nothing was typed yet, or what was typed is not an address: say what can be.
                     if (address.isNotBlank()) {
@@ -1196,28 +1199,29 @@ internal fun HostDialog(
                 if (ssh) {
                     Text(stringResource(R.string.ssh_address_hint), color = Colors.muted, fontSize = TextStyles.label)
                     Field(stringResource(R.string.ssh_user), sshUser) { sshUser = it }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { useKey = false }) {
-                            Text(
-                                stringResource(R.string.ssh_auth_password),
-                                color = if (!useKey) Colors.accent else Colors.muted,
-                                fontWeight = if (!useKey) FontWeight.SemiBold else FontWeight.Normal,
-                            )
-                        }
-                        TextButton(onClick = { useKey = true }) {
-                            Text(
-                                stringResource(R.string.ssh_auth_key),
-                                color = if (useKey) Colors.accent else Colors.muted,
-                                fontWeight = if (useKey) FontWeight.SemiBold else FontWeight.Normal,
-                            )
-                        }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                        ToggleButton(
+                            checked = !useKey,
+                            onCheckedChange = { useKey = false },
+                            shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+                            modifier = Modifier.weight(1f),
+                        ) { Text(stringResource(R.string.ssh_auth_password), maxLines = 1) }
+                        ToggleButton(
+                            checked = useKey,
+                            onCheckedChange = { useKey = true },
+                            shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                            modifier = Modifier.weight(1f),
+                        ) { Text(stringResource(R.string.ssh_auth_key), maxLines = 1) }
                     }
                     if (useKey) {
                         Field(stringResource(R.string.ssh_private_key), privateKey, password = true, singleLine = false, minLines = 3) { privateKey = it }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(onClick = { pickKey.launch(arrayOf("*/*")) }) {
-                                Text(stringResource(R.string.ssh_key_file), color = Colors.accent)
+                            OutlinedButton(onClick = { pickKey.launch(arrayOf("*/*")) }, shapes = ButtonDefaults.shapes()) {
+                                Glyph(R.drawable.ic_attach_file, MaterialTheme.colorScheme.primary, size = 18.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.ssh_key_file))
                             }
+                            Spacer(Modifier.width(12.dp))
                             if (privateKey.isNotBlank()) {
                                 Text(stringResource(R.string.ssh_key_loaded), color = Colors.ok, fontSize = TextStyles.label)
                             }
@@ -1255,25 +1259,25 @@ internal fun HostDialog(
         },
         confirmButton = {
             // Nothing to save until the address says where to connect and how to get in.
-            TextButton(
+            Button(
                 enabled = canSave,
                 onClick = {
-                    val address = parsed ?: return@TextButton
+                    val address = parsed ?: return@Button
                     savedHost(viaTailscale = address.viaTailscale)?.let(onSave)
                 },
-            ) { Text(stringResource(R.string.action_save), color = if (canSave) Colors.accent else Colors.muted) }
+                shapes = ButtonDefaults.shapes(),
+            ) { Text(stringResource(R.string.action_save)) }
         },
         dismissButton = {
             Row {
-                if (onDelete != null) TextButton(onClick = { confirmDelete = true }) { Text(stringResource(R.string.action_delete), color = Colors.danger) }
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel), color = Colors.muted) }
+                if (onDelete != null) TextButton(onClick = { confirmDelete = true }) { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
             }
         },
     )
     if (confirmDelete && onDelete != null && initial != null) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            containerColor = Colors.surface,
             title = { Text(stringResource(R.string.confirm_delete_host, initial.label), color = Colors.ink) },
             text = { Text(stringResource(R.string.confirm_delete_host_body), color = Colors.muted) },
             confirmButton = {
@@ -1285,6 +1289,22 @@ internal fun HostDialog(
                 TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.action_cancel), color = Colors.muted) }
             },
         )
+    }
+}
+
+/** One thing the address says, on a tonal chip; amber when it is a risk. */
+@Composable
+private fun ParsedChip(text: String, @androidx.annotation.DrawableRes icon: Int, warn: Boolean = false) {
+    val scheme = MaterialTheme.colorScheme
+    val fill = if (warn) Colors.amber.copy(alpha = 0.16f) else scheme.secondaryContainer
+    val ink = if (warn) Colors.amber else scheme.onSecondaryContainer
+    Row(
+        Modifier.height(32.dp).clip(RoundedCornerShape(8.dp)).background(fill).padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Glyph(icon, ink, size = 16.dp)
+        Spacer(Modifier.width(6.dp))
+        Text(text, style = MaterialTheme.typography.labelLarge, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
