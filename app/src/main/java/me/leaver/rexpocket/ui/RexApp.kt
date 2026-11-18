@@ -96,7 +96,8 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
         if (authUrl.isBlank()) return@LaunchedEffect
         openLink(context, authUrl)
     }
-    RexTheme {
+    val appearance by model.appearance.collectAsState()
+    RexTheme(appearance) {
         Box(Modifier.fillMaxSize().background(Colors.bg)) {
             val window = windowSize()
             // A tablet or a desk window keeps the list beside the pane: a session or a tab is

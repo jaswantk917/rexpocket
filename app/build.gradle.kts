@@ -166,6 +166,8 @@ dependencies {
     implementation("androidx.navigation3:navigation3-runtime:1.2.0")
     implementation("androidx.navigation3:navigation3-ui:1.2.0")
     implementation("androidx.graphics:graphics-shapes:1.1.0")
+    // Seed colour schemes for phones before Android 12, or when the wallpaper's are not wanted.
+    implementation("com.materialkolor:material-kolor:5.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.11.0")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")

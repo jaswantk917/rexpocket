@@ -31,6 +31,17 @@ data class TailscaleSettings(
     val hostname: String = "",
 )
 
+/**
+ * The app's colours and type. [scheme] is [DYNAMIC] (the wallpaper's, Android 12 and later) or the
+ * id of one of the seed schemes; [pureBlack] makes dark surfaces black; [appFont] sets the app in
+ * Google Sans Flex instead of the system font.
+ */
+data class Appearance(val scheme: String = DYNAMIC, val pureBlack: Boolean = false, val appFont: Boolean = true) {
+    companion object {
+        const val DYNAMIC = "dynamic"
+    }
+}
+
 class HostStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("rexpocket", Context.MODE_PRIVATE)
     private val secrets = SecretBox()
@@ -159,6 +170,21 @@ class HostStore(context: Context) {
         prefs.edit().putBoolean(KEY_KEY_BAR, on).apply()
     }
 
+    /** How the app is coloured and set: see [Appearance]. */
+    fun appearance(): Appearance = Appearance(
+        scheme = prefs.getString(KEY_SCHEME, null) ?: Appearance.DYNAMIC,
+        pureBlack = prefs.getBoolean(KEY_PURE_BLACK, false),
+        appFont = prefs.getBoolean(KEY_APP_FONT, true),
+    )
+
+    fun setAppearance(value: Appearance) {
+        prefs.edit()
+            .putString(KEY_SCHEME, value.scheme)
+            .putBoolean(KEY_PURE_BLACK, value.pureBlack)
+            .putBoolean(KEY_APP_FONT, value.appFont)
+            .apply()
+    }
+
     fun fontScale(): Float = prefs.getFloat(KEY_FONT, 1f)
 
     /**
@@ -203,6 +229,9 @@ class HostStore(context: Context) {
         private const val KEY_FONT = "font_scale"
         private const val KEY_ALERTS = "background_alerts"
         private const val KEY_KEY_BAR = "key_bar_always"
+        private const val KEY_SCHEME = "color_scheme"
+        private const val KEY_PURE_BLACK = "pure_black"
+        private const val KEY_APP_FONT = "app_font"
         private const val KEY_TAILSCALE_ENABLED = "tailscale_enabled"
         private const val KEY_TAILSCALE_HOSTNAME = "tailscale_hostname"
         fun newId(): String = UUID.randomUUID().toString()

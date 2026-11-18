@@ -35,6 +35,7 @@ import me.leaver.rexpocket.core.TerminalFeed
 import me.leaver.rexpocket.core.UpdateChannel
 import me.leaver.rexpocket.core.toProblem
 import me.leaver.rexpocket.core.RexClient
+import me.leaver.rexpocket.data.Appearance
 import me.leaver.rexpocket.data.HostStore
 import me.leaver.rexpocket.data.FontFiles
 import me.leaver.rexpocket.data.TERMINAL_FAMILIES
@@ -184,6 +185,7 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
 
     /** True when the key bar is kept on screen with a keyboard attached, which is not the default. */
     val keyBar = MutableStateFlow(store.keyBarAlways())
+    val appearance = MutableStateFlow(store.appearance())
     private val attention = AttentionLedger()
     var host: SavedHost? = null
         private set
@@ -259,6 +261,11 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
     fun setKeyBar(always: Boolean) {
         keyBar.value = always
         store.setKeyBarAlways(always)
+    }
+
+    fun setAppearance(value: Appearance) {
+        store.setAppearance(value)
+        appearance.value = value
     }
 
     fun setAlerts(on: Boolean) {
