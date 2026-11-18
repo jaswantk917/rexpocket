@@ -109,6 +109,8 @@ internal fun KeyBar(
     /** False while an upload is running: a second file would only be dropped. */
     attachReady: Boolean,
     onKeyboard: () -> Unit,
+    /** Puts the bar away; the top bar then offers it back. */
+    onHide: () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
     val scroll = rememberScrollState()
@@ -177,6 +179,7 @@ internal fun KeyBar(
                 icon = if (imeUp) R.drawable.ic_keyboard_hide else R.drawable.ic_keyboard,
             ) { onKeyboard() }
         }
+        RoundButton(R.drawable.ic_expand, stringResource(R.string.key_row_hide), onHide, tint = Colors.muted, size = 32.dp, iconSize = 20.dp)
     }
 }
 

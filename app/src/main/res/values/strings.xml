@@ -201,7 +201,6 @@
     <string name="keybar_always">Always shown</string>
     <string name="key_row_hide">Hide keys</string>
     <string name="key_row_show">Show keys</string>
-    <string name="sidebar_toggle">Sidebar</string>
     <string name="shortcut_group">Terminal</string>
     <string name="shortcut_next_tab">Next tab</string>
     <string name="shortcut_previous_tab">Previous tab</string>

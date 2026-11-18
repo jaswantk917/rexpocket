@@ -141,8 +141,6 @@ internal fun HomeScreen(
     /** True while the open pane stands beside this list, so the tab on the right carries a mark. */
     detail: Boolean = false,
     tailscale: TailscaleSettings,
-    tailscaleStatus: TailscaleStatus,
-    tailnetError: String?,
     tailnetPath: TailnetPath?,
     opening: Opening?,
     cachedSessions: (String) -> List<ListedSession>,
@@ -157,42 +155,10 @@ internal fun HomeScreen(
     onSave: (SavedHost) -> Unit,
     onDelete: (String) -> Unit,
     onTailscale: () -> Unit,
-    alerts: Boolean,
-    onAlerts: (Boolean) -> Unit,
-    /** True when the key bar is kept on screen with a keyboard attached, which is not the default. */
-    keyBar: Boolean,
-    onKeyBar: (Boolean) -> Unit,
-    onFontSettings: () -> Unit,
-    /** Builds the diagnostics report when the person asks for one, kept to [limit] characters. */
-    onDiagnosticsReport: (limit: Int) -> String,
-    /** The newer build the app found, if it found one, and the tap that acts on it. */
-    update: UpdateState,
-    onUpdate: () -> Unit,
-    /** Which builds the updater offers, and the tap on the other one. */
-    updateChannel: UpdateChannel,
-    onUpdateChannel: (UpdateChannel) -> Unit,
+    onSettings: () -> Unit,
 ) {
-    val context = LocalContext.current
-    // Android 13 asks for notifications at run time; alerts come on once the person allows them.
-    // The request lives here, not in the settings sheet: the sheet is gone before the answer comes.
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) onAlerts(true) else toast(context, context.getString(R.string.alerts_blocked))
-    }
-    val toggleAlerts = {
-        when {
-            alerts -> onAlerts(false)
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
-                ask.launch(Manifest.permission.POST_NOTIFICATIONS)
-            !Alerts.allowed(context) -> toast(context, context.getString(R.string.alerts_blocked))
-            else -> onAlerts(true)
-        }
-    }
     var editing by remember { mutableStateOf<SavedHost?>(null) }
     var creating by remember { mutableStateOf(false) }
-    var settings by remember { mutableStateOf(false) }
-    var diagnostics by remember { mutableStateOf(false) }
-    var recording by remember { mutableStateOf(Diagnostics.capture(context) != null) }
     var menuHost by remember { mutableStateOf<SavedHost?>(null) }
     // What the person was looking at survives the window being rebuilt under it, which a resize in
     // a free-form window does: the search stays open on its query, and the folds stay folded.
@@ -343,7 +309,7 @@ internal fun HomeScreen(
                 if (!searchOpen) {
                     FloatingControls(
                         activeOnly = activeOnly,
-                        onSettings = { settings = true },
+                        onSettings = onSettings,
                         onEye = { activeOnly = !activeOnly },
                         onSearch = { searchOpen = true },
                         modifier = Modifier.align(Alignment.BottomCenter),
@@ -392,15 +358,58 @@ internal fun HomeScreen(
             }
         }
     }
+}
 
-    if (settings) {
+/**
+ * Settings, and the diagnostics sheet they lead to. Kept out of the host list so the terminal can
+ * open them too: on a phone the list is not on screen while a pane is.
+ */
+@Composable
+internal fun Settings(
+    open: Boolean,
+    onClose: () -> Unit,
+    tailscale: TailscaleSettings,
+    tailscaleStatus: TailscaleStatus,
+    tailnetError: String?,
+    onTailscale: () -> Unit,
+    alerts: Boolean,
+    onAlerts: (Boolean) -> Unit,
+    keyBar: Boolean,
+    onKeyBar: (Boolean) -> Unit,
+    onFontSettings: () -> Unit,
+    onDiagnosticsReport: (limit: Int) -> String,
+    update: UpdateState,
+    onUpdate: () -> Unit,
+    updateChannel: UpdateChannel,
+    onUpdateChannel: (UpdateChannel) -> Unit,
+) {
+    val context = LocalContext.current
+    // Android 13 asks for notifications at run time; alerts come on once the person allows them.
+    // The request lives here, not in the settings sheet: the sheet is gone before the answer comes.
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) onAlerts(true) else toast(context, context.getString(R.string.alerts_blocked))
+    }
+    val toggleAlerts = {
+        when {
+            alerts -> onAlerts(false)
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
+                ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+            !Alerts.allowed(context) -> toast(context, context.getString(R.string.alerts_blocked))
+            else -> onAlerts(true)
+        }
+    }
+    var diagnostics by remember { mutableStateOf(false) }
+    var recording by remember { mutableStateOf(Diagnostics.capture(context) != null) }
+
+    if (open) {
         SettingsSheet(
             tailscale = tailscale,
             tailscaleStatus = tailscaleStatus,
             tailnetError = tailnetError,
-            onDismiss = { settings = false },
+            onDismiss = onClose,
             onTailscale = {
-                settings = false
+                onClose()
                 onTailscale()
             },
             alerts = alerts,
@@ -410,7 +419,7 @@ internal fun HomeScreen(
             onFontSettings = onFontSettings,
             recording = recording,
             onDiagnostics = {
-                settings = false
+                onClose()
                 diagnostics = true
             },
             update = update,

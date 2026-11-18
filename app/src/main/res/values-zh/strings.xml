@@ -198,7 +198,6 @@
     <string name="keybar_always">总是显示</string>
     <string name="key_row_hide">隐藏按键栏</string>
     <string name="key_row_show">显示按键栏</string>
-    <string name="sidebar_toggle">侧边栏</string>
     <string name="shortcut_group">终端</string>
     <string name="shortcut_next_tab">下一个标签页</string>
     <string name="shortcut_previous_tab">上一个标签页</string>

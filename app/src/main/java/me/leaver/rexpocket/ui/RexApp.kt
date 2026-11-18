@@ -51,6 +51,7 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
     val terminalTypeface by model.terminalTypeface.collectAsState()
     val terminalFont by model.terminalFont.collectAsState()
     var fontSettingsOpen by remember { mutableStateOf(false) }
+    var settingsOpen by remember { mutableStateOf(false) }
     val tailscale by model.tailscale.collectAsState()
     val tailscaleStatus by model.tailscaleStatus.collectAsState()
     val tailnetError by model.tailnetError.collectAsState()
@@ -108,8 +109,6 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     connected = model.host,
                     state = pocket,
                     tailscale = tailscale,
-                    tailscaleStatus = tailscaleStatus,
-                    tailnetError = tailnetError,
                     tailnetPath = tailnetPath,
                     opening = opening,
                     cachedSessions = model::cachedSessions,
@@ -124,16 +123,7 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     onSave = model::saveHost,
                     onDelete = model::deleteHost,
                     onTailscale = { tailscaleOpen = true },
-                    alerts = alerts,
-                    onAlerts = model::setAlerts,
-                    keyBar = keyBar,
-                    onKeyBar = model::setKeyBar,
-                    onFontSettings = { fontSettingsOpen = true },
-                    onDiagnosticsReport = { limit -> model.diagnosticReport(limit) },
-                    update = update,
-                    onUpdate = { updateTapped(update) },
-                    updateChannel = updateChannel,
-                    onUpdateChannel = model::setUpdateChannel,
+                    onSettings = { settingsOpen = true },
                 )
             }
             val term: @Composable (Boolean) -> Unit = { embedded ->
@@ -155,6 +145,7 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     onCancelUpload = model::cancelUpload,
                     onDismissUpload = model::dismissUpload,
                     onRetryUpload = model::retryUpload,
+                    onSettings = { settingsOpen = true },
                 )
             }
             when (layoutFor(window, hasHosts = hosts.isNotEmpty(), terminalOpen = route == Route.Term)) {
@@ -194,6 +185,24 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                 onLater = { offeredOnce = offeredOnce + offerKey },
             )
         }
+        Settings(
+            open = settingsOpen,
+            onClose = { settingsOpen = false },
+            tailscale = tailscale,
+            tailscaleStatus = tailscaleStatus,
+            tailnetError = tailnetError,
+            onTailscale = { tailscaleOpen = true },
+            alerts = alerts,
+            onAlerts = model::setAlerts,
+            keyBar = keyBar,
+            onKeyBar = model::setKeyBar,
+            onFontSettings = { fontSettingsOpen = true },
+            onDiagnosticsReport = { limit -> model.diagnosticReport(limit) },
+            update = update,
+            onUpdate = { updateTapped(update) },
+            updateChannel = updateChannel,
+            onUpdateChannel = model::setUpdateChannel,
+        )
         if (fontSettingsOpen) {
             FontSettingsDialog(terminalFont, model::selectTerminalFont) { fontSettingsOpen = false }
         }

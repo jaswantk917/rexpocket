@@ -32,7 +32,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -156,6 +162,7 @@ internal fun TermScreen(
     keyBarWithKeyboard: Boolean = false,
     /** True when this pane shares the window with the list, which is then the way back. */
     embedded: Boolean = false,
+    onSettings: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val ime = LocalSoftwareKeyboardController.current
@@ -277,7 +284,9 @@ internal fun TermScreen(
     // it was - while the dock and the rest of the bottom chrome rise over it. A program is therefore
     // never resized by the screen keyboard opening, so it never redraws or reflows for it.
     val hardwareKeys = rememberHardwareKeyboard()
-    val dock = keyBarShown(hardwareKeys, keyBarWithKeyboard)
+    // Put away or brought back by hand, for as long as this screen lasts; otherwise the setting decides.
+    var keyBarChoice by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    val dock = keyBarChoice ?: keyBarShown(hardwareKeys, keyBarWithKeyboard)
     var bottomPx by remember { mutableIntStateOf(0) }
     var panePx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
@@ -295,6 +304,7 @@ internal fun TermScreen(
                 onNavigate = { if (view != null) sheet = Sheet.Navigator },
                 onHolder = { if (state.owning) onAct { releasePane() } else onAct { takeOver() } },
                 onMore = { sheet = Sheet.Actions },
+                onShowKeys = if (dock) null else { { keyBarChoice = true } },
             )
             TermBanner(state, onRetry = onRetry, onDismiss = onDismissNotice)
             // The pane sits on its own paper: white in the day, the page at night, edge to edge, the
@@ -376,6 +386,7 @@ internal fun TermScreen(
                             onAttach = { filePicker.launch("*/*") },
                             attachReady = upload?.running != true,
                             onKeyboard = { toggleKeyboard() },
+                            onHide = { keyBarChoice = false },
                         )
                     }
                 }
@@ -427,6 +438,18 @@ internal fun TermScreen(
                     SheetItem(stringResource(R.string.menu_kill_session), Colors.danger, icon = R.drawable.ic_delete) {
                         confirm = Confirm(Level.Session, view.sessionId, view.label)
                     }
+                }
+            }
+            // Also on the host list's pill; here because on a phone the list is not on screen.
+            Group {
+                if (dock) {
+                    SheetItem(stringResource(R.string.key_row_hide), icon = R.drawable.ic_keyboard_hide) { keyBarChoice = false }
+                } else {
+                    SheetItem(stringResource(R.string.key_row_show), icon = R.drawable.ic_keyboard) { keyBarChoice = true }
+                }
+                SheetItem(stringResource(R.string.settings), icon = R.drawable.ic_settings) {
+                    sheet = null
+                    onSettings()
                 }
             }
         }
@@ -604,6 +627,8 @@ private fun SessionTopBar(
     onNavigate: () -> Unit,
     onHolder: () -> Unit,
     onMore: () -> Unit,
+    /** Brings the key bar back while it is put away; null while it is on screen. */
+    onShowKeys: (() -> Unit)?,
 ) {
     val title = when {
         view == null -> state.endpointLabel.ifBlank { stringResource(R.string.app_name) }
@@ -663,7 +688,23 @@ private fun SessionTopBar(
             HolderChip(state.owning, onHolder)
             Spacer(Modifier.width(4.dp))
         }
+        ShowKeysButton(onShowKeys)
         RoundButton(R.drawable.ic_more, stringResource(R.string.action_more), onMore, plate = Colors.key, size = 40.dp)
+    }
+}
+
+/** The key bar's way back, beside the menu while the bar is put away. */
+@Composable
+private fun ShowKeysButton(onShowKeys: (() -> Unit)?) {
+    AnimatedVisibility(
+        visible = onShowKeys != null,
+        enter = fadeIn() + scaleIn(initialScale = 0.6f),
+        exit = fadeOut() + scaleOut(targetScale = 0.6f),
+    ) {
+        Row {
+            RoundButton(R.drawable.ic_keyboard, stringResource(R.string.key_row_show), { onShowKeys?.invoke() }, plate = Colors.key, size = 40.dp)
+            Spacer(Modifier.width(4.dp))
+        }
     }
 }
 
