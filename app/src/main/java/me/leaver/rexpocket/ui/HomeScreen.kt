@@ -1,5 +1,39 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconToggleButton
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.HorizontalFloatingToolbar
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LargeFlexibleTopAppBar
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.toShape
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalView
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -159,7 +193,7 @@ internal fun HomeScreen(
 ) {
     var editing by remember { mutableStateOf<SavedHost?>(null) }
     var creating by remember { mutableStateOf(false) }
-    var menuHost by remember { mutableStateOf<SavedHost?>(null) }
+    val view = LocalView.current
     // What the person was looking at survives the window being rebuilt under it, which a resize in
     // a free-form window does: the search stays open on its query, and the folds stay folded.
     var searchOpen by rememberSaveable { mutableStateOf(false) }
@@ -207,112 +241,151 @@ internal fun HomeScreen(
             if (sessions.isEmpty() && (activeOnly || !hostMatch)) return@mapNotNull null
             host to sessions
         }
-        val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-        Column(Modifier.fillMaxSize().background(Colors.bg).statusBarsPadding().imePadding()) {
-            if (searchOpen) {
-                SearchBar(query = query, focus = focus, onQuery = { query = it }, onClose = closeSearch)
-            }
-            Box(Modifier.weight(1f)) {
+        val list = rememberLazyListState()
+        val bar = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        // The toolbar folds down to its button while the list is read downwards, as Orion's dock does.
+        val toolbarOpen by remember { derivedStateOf { !list.canScrollBackward || list.lastScrolledBackward } }
+        // What needs a look, across every tab the phone knows of; the host count when nothing does.
+        val working = state.blockStatus.values.count { it.state == "working" }
+        val waiting = state.blockStatus.values.count { it.state == "blocked" }
+        val subtitle = if (working + waiting > 0) {
+            stringResource(R.string.home_activity, working, waiting)
+        } else {
+            pluralStringResource(R.plurals.host_count, hosts.size, hosts.size)
+        }
+        Scaffold(
+            modifier = Modifier.fillMaxSize().nestedScroll(bar.nestedScrollConnection),
+            containerColor = Colors.bg,
+            contentWindowInsets = WindowInsets(0),
+            topBar = {
+                if (searchOpen) {
+                    SearchBar(query = query, focus = focus, onQuery = { query = it }, onClose = closeSearch)
+                } else {
+                    LargeFlexibleTopAppBar(
+                        title = { Text(stringResource(R.string.home_title), fontWeight = FontWeight.Bold) },
+                        subtitle = { Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Colors.bg,
+                            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        ),
+                        scrollBehavior = bar,
+                    )
+                }
+            },
+        ) { padding ->
+            Box(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).imePadding()) {
+                val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 LazyColumn(
                     Modifier.fillMaxSize(),
+                    state = list,
                     contentPadding = PaddingValues(
                         start = PAGE,
                         end = PAGE,
-                        top = if (searchOpen) 0.dp else 8.dp,
-                        // Clear of the floating controls, so the last tab can be scrolled above them.
-                        bottom = if (searchOpen) 16.dp else navBottom + 104.dp,
+                        top = 4.dp,
+                        // Clear of the toolbar, so the last tab can be scrolled above it.
+                        bottom = if (searchOpen) 16.dp else navBottom + 112.dp,
                     ),
                 ) {
+                    var shown = 0
                     rows.forEachIndexed { index, (host, sessions) ->
                         val live = connected?.id == host.id
                         val hostExpanded = host.id !in collapsedHosts || searchOpen
+                        val hostOrder = shown++
                         item(key = "host-${host.id}") {
-                            if (index > 0) Spacer(Modifier.height(12.dp))
-                            HostHeader(
-                                host = host,
-                                live = live,
-                                status = if (live) phaseText(state) else null,
-                                phase = if (live) state.phase else null,
-                                sessionCount = sessions.size,
-                                expanded = hostExpanded,
-                                onToggle = {
-                                    if (live) {
-                                        collapsedHosts = if (hostExpanded) collapsedHosts + host.id else collapsedHosts - host.id
-                                    } else {
-                                        onConnect(host)
-                                    }
-                                },
-                                onMenu = { menuHost = host },
-                            )
-                            if (live) HostStatus(state, tailnetPath, onRetry, onProbePath)
+                            Column(Modifier.animateItem().reveal(hostOrder)) {
+                                if (index > 0) Spacer(Modifier.height(20.dp))
+                                HostHeader(
+                                    host = host,
+                                    live = live,
+                                    status = if (live) phaseText(state) else null,
+                                    phase = if (live) state.phase else null,
+                                    sessionCount = sessions.size,
+                                    expanded = hostExpanded,
+                                    onToggle = {
+                                        if (live) {
+                                            collapsedHosts = if (hostExpanded) collapsedHosts + host.id else collapsedHosts - host.id
+                                        } else {
+                                            onConnect(host)
+                                        }
+                                    },
+                                    onConnect = { onConnect(host) },
+                                    onNewSession = { onNewSession(host) },
+                                    onEdit = { editing = host },
+                                    onDisconnect = onDisconnect,
+                                )
+                                if (live) HostStatus(state, tailnetPath, onRetry, onProbePath)
+                                Spacer(Modifier.height(8.dp))
+                            }
                         }
                         if (hostExpanded) {
                             sessions.forEach { row ->
                                 val sessionExpanded = row.session.id !in collapsedSessions || searchOpen
                                 val openingThis = opening == Opening.Existing(row.session.id)
+                                val showTabs = sessionExpanded && row.view != null
+                                val order = shown++
                                 item(key = "session-${row.session.id}") {
-                                    SessionHeader(
-                                        row = row,
-                                        live = live,
-                                        opening = openingThis,
-                                        expanded = sessionExpanded,
-                                        onToggle = {
-                                            if (row.view == null) {
-                                                onOpenSession(host, row.session.id)
-                                            } else {
-                                                collapsedSessions = if (sessionExpanded) collapsedSessions + row.session.id else collapsedSessions - row.session.id
-                                            }
-                                        },
-                                        onNewTab = { onNewTab(host, row.session.id) },
-                                    )
-                                }
-                                if (sessionExpanded) {
-                                    item(key = "tabs-${row.session.id}") {
-                                        if (row.tabs.isEmpty()) {
+                                    Column(Modifier.animateItem().reveal(order)) {
+                                        SessionHeader(
+                                            row = row,
+                                            live = live,
+                                            opening = openingThis,
+                                            expanded = sessionExpanded,
+                                            joined = showTabs,
+                                            onToggle = {
+                                                if (row.view == null) {
+                                                    onOpenSession(host, row.session.id)
+                                                } else {
+                                                    collapsedSessions = if (sessionExpanded) collapsedSessions + row.session.id else collapsedSessions - row.session.id
+                                                }
+                                            },
+                                            onNewTab = { onNewTab(host, row.session.id) },
+                                        )
+                                        if (sessionExpanded && row.view == null) {
+                                            Spacer(Modifier.height(SEGMENT_GAP))
                                             EmptyTabs(
                                                 text = when {
                                                     openingThis -> stringResource(R.string.session_opening)
                                                     !live -> stringResource(R.string.session_cached)
-                                                    row.view == null -> stringResource(R.string.session_open_to_load)
-                                                    else -> stringResource(R.string.no_tabs)
+                                                    else -> stringResource(R.string.session_open_to_load)
                                                 },
-                                                canOpen = row.view == null && !openingThis,
+                                                canOpen = !openingThis,
                                                 onOpen = { onOpenSession(host, row.session.id) },
                                             )
-                                        } else {
-                                            TabCard(
-                                                row = row,
-                                                state = state,
-                                                opening = openingThis,
-                                                open = detail && live && state.activeSessionId == row.session.id,
-                                                onOpen = { windowId -> onOpenTab(host, row.session.id, windowId) },
-                                            )
                                         }
-                                        Spacer(Modifier.height(4.dp))
                                     }
                                 }
+                                if (showTabs) {
+                                    item(key = "tabs-${row.session.id}") {
+                                        TabGroup(
+                                            row = row,
+                                            state = state,
+                                            opening = openingThis,
+                                            open = detail && live && state.activeSessionId == row.session.id,
+                                            onOpen = { windowId -> onOpenTab(host, row.session.id, windowId) },
+                                            modifier = Modifier.animateItem().reveal(order),
+                                        )
+                                    }
+                                }
+                                item(key = "gap-${row.session.id}") { Spacer(Modifier.height(12.dp)) }
                             }
                         }
                     }
                     if (rows.isEmpty()) {
                         item { NotFound(activeOnly = activeOnly) }
                     }
-                    // The list is the only place a host is added from, so the way to add one is at
-                    // the end of it - above it, there is nothing until a host exists.
-                    if (!searchOpen && hosts.isNotEmpty()) {
-                        item(key = "add-host") {
-                            Spacer(Modifier.height(12.dp))
-                            AddHostRow(onClick = { creating = true })
-                        }
-                    }
                 }
                 if (!searchOpen) {
-                    FloatingControls(
+                    HomeToolbar(
+                        expanded = toolbarOpen,
                         activeOnly = activeOnly,
-                        onSettings = onSettings,
-                        onEye = { activeOnly = !activeOnly },
                         onSearch = { searchOpen = true },
-                        modifier = Modifier.align(Alignment.BottomCenter),
+                        onActiveOnly = {
+                            activeOnly = !activeOnly
+                            Haptics.toggle(view, activeOnly)
+                        },
+                        onSettings = onSettings,
+                        onAdd = { creating = true },
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
                     )
                 }
             }
@@ -338,26 +411,6 @@ internal fun HomeScreen(
         )
     }
 
-    menuHost?.let { host ->
-        ActionSheet(onDismiss = { menuHost = null }, title = host.label) {
-            Group {
-                SheetItem(stringResource(R.string.session_new), icon = R.drawable.ic_add) {
-                    menuHost = null
-                    onNewSession(host)
-                }
-                SheetItem(stringResource(R.string.action_edit_host), icon = R.drawable.ic_edit) {
-                    menuHost = null
-                    editing = host
-                }
-                if (connected?.id == host.id) {
-                    SheetItem(stringResource(R.string.action_disconnect), Colors.danger, icon = R.drawable.ic_disconnect) {
-                        menuHost = null
-                        onDisconnect()
-                    }
-                }
-            }
-        }
-    }
 }
 
 /**
@@ -441,15 +494,36 @@ internal fun Settings(
 /** The fold's chevron: down while open, turned to point right while folded. */
 @Composable
 private fun FoldChevron(expanded: Boolean) {
-    val turn by animateFloatAsState(if (expanded) 0f else -90f, label = "fold")
-    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+    val turn by animateFloatAsState(if (expanded) 0f else -90f, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "fold")
+    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
         Glyph(R.drawable.ic_expand, Colors.muted, Modifier.rotate(turn))
     }
 }
 
 /**
- * One host: its mark, its name with the connection's dot, and what it is doing. Tapping it folds
- * its sessions, or connects it when it is not the one open; the menu edits it.
+ * A host's mark: the computer on an expressive cookie, filled with the scheme's primary container
+ * while it is the one connected, and its connection's colour cut into the corner.
+ */
+@Composable
+private fun HostMark(live: Boolean, phase: Phase?) {
+    val scheme = MaterialTheme.colorScheme
+    val fill by animateColorAsState(if (live) scheme.primaryContainer else scheme.surfaceContainerHighest, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "mark")
+    val ink = if (live) scheme.onPrimaryContainer else scheme.onSurfaceVariant
+    val turn by animateFloatAsState(if (live) 0f else -30f, MaterialTheme.motionScheme.slowSpatialSpec(), label = "mark-turn")
+    Box(Modifier.size(52.dp)) {
+        Box(
+            Modifier.size(52.dp).graphicsLayer { rotationZ = turn }.clip(MaterialShapes.Cookie9Sided.toShape()).background(fill),
+            contentAlignment = Alignment.Center,
+        ) {
+            Glyph(R.drawable.ic_host, ink, Modifier.graphicsLayer { rotationZ = -turn }, size = 24.dp)
+        }
+        if (phase != null) Dot(phaseTint(phase), 14.dp, Modifier.align(Alignment.BottomEnd), ring = Colors.bg)
+    }
+}
+
+/**
+ * One host: its mark, its name, and what it is doing. Tapping it folds its sessions, or connects it
+ * when it is not the one open. Its menu is anchored to it, the way Android menus are.
  */
 @Composable
 private fun HostHeader(
@@ -460,84 +534,129 @@ private fun HostHeader(
     sessionCount: Int,
     expanded: Boolean,
     onToggle: () -> Unit,
-    onMenu: () -> Unit,
+    onConnect: () -> Unit,
+    onNewSession: () -> Unit,
+    onEdit: () -> Unit,
+    onDisconnect: () -> Unit,
 ) {
     val folded = stringResource(R.string.state_folded)
+    var menu by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(Radius.card))
-            .clickable(onClick = onToggle)
+        Modifier.fillMaxWidth().heightIn(min = 72.dp)
+            .pressable(RoundedCornerShape(28.dp), onLongClick = { menu = true }, onClick = onToggle)
             .semantics { if (live && !expanded) stateDescription = folded }
-            .padding(start = KEY_MARK),
+            .padding(start = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Glyph(R.drawable.ic_host, if (live) Colors.ink else Colors.muted, size = 24.dp)
-        Spacer(Modifier.width(KEY_TEXT - KEY_MARK - 24.dp))
-        Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    host.label,
-                    color = Colors.ink,
-                    fontSize = TextStyles.title,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (live) {
-                    Spacer(Modifier.width(8.dp))
-                    Dot(phaseTint(phase ?: Phase.Idle), 8.dp)
-                }
-            }
+        HostMark(live, phase)
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
             Text(
-                (if (live) status.orEmpty() else stringResource(R.string.host_not_connected)) +
-                    if (sessionCount > 0) " · " + pluralStringResource(R.plurals.session_count, sessionCount, sessionCount) else "",
-                color = Colors.muted,
-                fontSize = TextStyles.label,
+                host.label,
+                style = MaterialTheme.typography.titleLargeEmphasized,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            val line = (if (live) status.orEmpty() else stringResource(R.string.host_not_connected)) +
+                if (sessionCount > 0) " · " + pluralStringResource(R.plurals.session_count, sessionCount, sessionCount) else ""
+            AnimatedContent(line, transitionSpec = { captionSwap() }, label = "host-status") { text ->
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (live) phaseTint(phase ?: Phase.Idle) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
-        RoundButton(R.drawable.ic_more, stringResource(R.string.action_more), onMenu, tint = Colors.muted, size = 48.dp)
+        if (live) FoldChevron(expanded)
+        Box {
+            RoundButton(R.drawable.ic_more, stringResource(R.string.action_more), { menu = true }, tint = Colors.muted, size = 48.dp)
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = RoundedCornerShape(20.dp)) {
+                if (!live) MenuItem(stringResource(R.string.action_connect), R.drawable.ic_tailnet) { menu = false; onConnect() }
+                MenuItem(stringResource(R.string.session_new), R.drawable.ic_add) { menu = false; onNewSession() }
+                MenuItem(stringResource(R.string.action_edit_host), R.drawable.ic_edit) { menu = false; onEdit() }
+                if (live) {
+                    HorizontalDivider()
+                    MenuItem(stringResource(R.string.action_disconnect), R.drawable.ic_disconnect, danger = true) { menu = false; onDisconnect() }
+                }
+            }
+        }
     }
 }
+
+/** A row of an anchored menu: its icon, its label, red when it takes something away. */
+@Composable
+internal fun MenuItem(label: String, @androidx.annotation.DrawableRes icon: Int, danger: Boolean = false, onClick: () -> Unit) {
+    val tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    DropdownMenuItem(
+        text = { Text(label, color = tint) },
+        leadingIcon = { Glyph(icon, if (danger) tint else MaterialTheme.colorScheme.onSurfaceVariant) },
+        onClick = onClick,
+    )
+}
+
+/** A status line swaps by sliding: the new words rise in as the old ones rise out. */
+internal fun <S> AnimatedContentTransitionScope<S>.captionSwap(): ContentTransform =
+    (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut())
 
 /** The line under a connected host: why it is not live, and how the tailnet carries it. */
 @Composable
 private fun HostStatus(state: PocketState, path: TailnetPath?, onRetry: () -> Unit, onProbe: () -> Unit) {
     val problem = rememberSettledProblem(state.phase, state.problem.takeIf { state.phase != Phase.Live })
-    if (problem != null) {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 40.dp).clip(RoundedCornerShape(Radius.chip)).clickable(onClick = onRetry)
-                .padding(start = KEY_TEXT, end = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(problemText(problem, state.endpointLabel), color = Colors.danger, fontSize = TextStyles.label, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(12.dp))
-            Text(stringResource(R.string.action_retry_now), color = Colors.accent, fontSize = TextStyles.label, fontWeight = FontWeight.Medium)
+    Column(Modifier.padding(start = 72.dp)) {
+        if (problem != null) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    problemText(problem, state.endpointLabel),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onRetry, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.action_retry_now)) }
+            }
         }
-    }
-    if (path != null) {
-        val ms = path.latencyMs?.let { " · ${it.toInt()} ms" }.orEmpty()
-        val (text, color) = when (path) {
-            is TailnetPath.Direct -> stringResource(R.string.tailnet_path_direct) + ms to Colors.ok
-            is TailnetPath.PeerRelay -> stringResource(R.string.tailnet_path_peer_relay) + ms to Colors.amber
-            is TailnetPath.Derp ->
-                stringResource(R.string.tailnet_path_derp, path.regionCode.ifBlank { path.regionId.toString() }) + ms to Colors.amber
-            is TailnetPath.Unreachable -> stringResource(R.string.tailnet_path_unreachable, path.reason) to Colors.danger
+        if (path != null) {
+            val ms = path.latencyMs?.let { " · ${it.toInt()} ms" }.orEmpty()
+            val (text, color) = when (path) {
+                is TailnetPath.Direct -> stringResource(R.string.tailnet_path_direct) + ms to Colors.ok
+                is TailnetPath.PeerRelay -> stringResource(R.string.tailnet_path_peer_relay) + ms to Colors.amber
+                is TailnetPath.Derp ->
+                    stringResource(R.string.tailnet_path_derp, path.regionCode.ifBlank { path.regionId.toString() }) + ms to Colors.amber
+                is TailnetPath.Unreachable -> stringResource(R.string.tailnet_path_unreachable, path.reason) to Colors.danger
+            }
+            // Tapping the path measures it again.
+            Row(
+                Modifier.pressable(RoundedCornerShape(50), onClick = onProbe)
+                    .background(color.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Dot(color, 6.dp)
+                Spacer(Modifier.width(6.dp))
+                Text(text, style = MaterialTheme.typography.labelMedium, color = color)
+            }
         }
-        Text(
-            text,
-            color = color,
-            fontSize = TextStyles.label,
-            modifier = Modifier.padding(start = KEY_TEXT - 8.dp, bottom = 4.dp).clip(RoundedCornerShape(Radius.chip))
-                .clickable(onClick = onProbe).padding(horizontal = 8.dp, vertical = 4.dp),
-        )
     }
 }
 
+/** Corner radius of a segmented group's outer corners, and of the corners where segments meet. */
+private val SEGMENT_OUTER = 24.dp
+private val SEGMENT_INNER = 6.dp
+
+/** The gap between the segments of one group: the page shows through, no hairlines. */
+private val SEGMENT_GAP = 2.dp
+
+/** The shape of segment [index] of [count], as Material 3's segmented lists draw them. */
+private fun segmentShape(index: Int, count: Int): RoundedCornerShape {
+    val top = if (index == 0) SEGMENT_OUTER else SEGMENT_INNER
+    val bottom = if (index == count - 1) SEGMENT_OUTER else SEGMENT_INNER
+    return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
+}
+
 /**
- * A session under its host, as the reference writes it: a quiet group label with its tab count, the
- * plus that makes a tab in it, and the fold. A blue dot says something in it is working.
+ * A session: the head of its segmented group - its name, what it holds, the plus that opens a tab
+ * in it, and the fold. [joined] when its tabs follow it in the same group.
  */
 @Composable
 private fun SessionHeader(
@@ -545,6 +664,7 @@ private fun SessionHeader(
     live: Boolean,
     opening: Boolean,
     expanded: Boolean,
+    joined: Boolean,
     onToggle: () -> Unit,
     onNewTab: () -> Unit,
 ) {
@@ -555,154 +675,158 @@ private fun SessionHeader(
         !live -> stringResource(R.string.session_cached)
         else -> null
     }
+    val shape = if (joined) segmentShape(0, 2) else RoundedCornerShape(SEGMENT_OUTER)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(Radius.chip)).clickable(onClick = onToggle)
-            .padding(start = KEY_MARK),
+        Modifier.fillMaxWidth().heightIn(min = 60.dp)
+            .pressable(shape, onClick = onToggle)
+            .background(Colors.surface)
+            .padding(start = 20.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                row.session.label,
-                color = Colors.muted,
-                fontSize = TextStyles.subhead,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            if (row.activity) {
-                Spacer(Modifier.width(8.dp))
-                Dot(Colors.accent, 6.dp)
+        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    row.session.label,
+                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (row.activity) {
+                    Spacer(Modifier.width(8.dp))
+                    Dot(MaterialTheme.colorScheme.primary, 8.dp)
+                }
             }
             if (detail != null) {
-                Spacer(Modifier.width(8.dp))
-                Text(detail, color = if (opening) Colors.accent else Colors.muted, fontSize = TextStyles.label, maxLines = 1)
+                Text(
+                    detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (opening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
             }
         }
+        if (opening) LoadingIndicator(Modifier.size(32.dp))
         RoundButton(
-            R.drawable.ic_add_circle,
+            R.drawable.ic_add,
             stringResource(R.string.menu_new_tab),
             onNewTab,
-            tint = Colors.muted,
-            size = 48.dp,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            size = 40.dp,
             enabled = !opening,
         )
-        FoldChevron(expanded || row.view == null)
+        if (row.view != null) FoldChevron(expanded)
     }
 }
 
-/** The tabs of one session, on one card, hairlines between rows from the title's keyline. */
+/** The tabs of one session: the rest of its segmented group, the tab on screen beside it marked. */
 @Composable
-private fun TabCard(
+private fun TabGroup(
     row: HomeSession,
     state: PocketState,
     opening: Boolean,
     /** True for the session whose tab the pane beside the list is showing. */
     open: Boolean,
     onOpen: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(Colors.surface)) {
+    Column(modifier.fillMaxWidth()) {
         row.tabs.forEachIndexed { index, window ->
-            if (index > 0) {
-                Box(Modifier.padding(start = KEY_TEXT).fillMaxWidth().height(1.dp).background(Colors.line))
-            }
+            Spacer(Modifier.height(SEGMENT_GAP))
             val activity = window.blocks.firstNotNullOfOrNull { state.activityOf(it) }
             TabRow(
                 title = row.view?.let { tabTitle(it, window, state) } ?: window.label,
                 program = tabProgram(window, state),
-                detail = detailFor(window, activity),
-                busy = activity != null,
+                panes = window.blocks.size,
+                activity = activity,
                 opening = opening,
                 open = open && window.id == state.view?.activeWindowId,
+                // The session's head is segment 0; its tabs follow it.
+                shape = segmentShape(index + 1, row.tabs.size + 1),
                 onOpen = { onOpen(window.id) },
             )
         }
     }
 }
 
-@Composable
-private fun detailFor(window: WindowInfo, activity: ProgramRecord?): String {
-    val panes = pluralStringResource(R.plurals.pane_count, window.blocks.size, window.blocks.size)
-    val word = activity?.let { statusWord(it) }
-    return if (word != null) "$panes · $word" else panes
-}
-
 /**
- * One tab: the tile of what runs in it - an agent's mark, or the terminal for a shell - badged blue
- * while a pane in it works, its name, its panes, a chevron.
+ * One tab: the mark of what runs in it, its name and panes, and what it is doing at the end - a
+ * living loader while an agent works, an amber "needs you" while one waits.
  */
 @Composable
 private fun TabRow(
     title: String,
     program: String?,
-    detail: String,
-    busy: Boolean,
+    panes: Int,
+    activity: ProgramRecord?,
     opening: Boolean,
     /** True for the tab the pane beside the list is showing. */
     open: Boolean,
+    shape: RoundedCornerShape,
     onOpen: () -> Unit,
 ) {
     val selected = stringResource(R.string.state_selected)
+    val scheme = MaterialTheme.colorScheme
+    val fill by animateColorAsState(if (open) scheme.secondaryContainer else Colors.surface, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "tab")
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 64.dp)
-            .background(if (open) Colors.keyOn else Color.Transparent)
-            .clickable(enabled = !opening, role = Role.Button, onClick = onOpen)
+        Modifier.fillMaxWidth().heightIn(min = 68.dp)
+            .pressable(shape, enabled = !opening, onClick = onOpen)
+            .background(fill)
             .semantics { if (open) stateDescription = selected }
-            .padding(start = KEY_MARK, end = 12.dp),
+            .padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box {
-            ProgramTile(program, size = TILE)
-            if (busy) Dot(Colors.accent, 8.dp, Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp), ring = Colors.surface)
-        }
-        Spacer(Modifier.width(KEY_TEXT - KEY_MARK - TILE))
+        ProgramTile(program, size = TILE)
+        Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
             Text(
                 title,
-                color = Colors.ink,
-                fontSize = TextStyles.body,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
+                color = if (open) scheme.onSecondaryContainer else scheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(detail, color = if (busy) Colors.accent else Colors.muted, fontSize = TextStyles.label, maxLines = 1)
+            Text(
+                pluralStringResource(R.plurals.pane_count, panes, panes),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+            )
         }
-        Glyph(R.drawable.ic_chevron_right, Colors.muted, size = 24.dp)
+        AnimatedContent(activity?.state, transitionSpec = { (scaleIn(initialScale = 0.6f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.6f) + fadeOut()) }, label = "tab-activity") { state ->
+            when (state) {
+                "working" -> LoadingIndicator(Modifier.size(36.dp))
+                "blocked" -> activity?.let { StatusPill(statusWord(it).orEmpty(), Colors.amber) }
+                else -> Spacer(Modifier.size(1.dp))
+            }
+        }
     }
 }
 
-/**
- * The end of the list: the way to add another computer, where the list runs out. It sits under the
- * hosts rather than in the settings, because adding one is a thing to do to this list.
- */
+/** A short state on a tonal pill in its own colour. */
 @Composable
-private fun AddHostRow(onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(Radius.card)).background(Colors.surface)
-            .clickable(role = Role.Button, onClick = onClick).padding(start = 16.dp, end = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Glyph(R.drawable.ic_add, Colors.accent, size = 24.dp)
-        Spacer(Modifier.width(16.dp))
-        Text(
-            stringResource(R.string.action_add_host),
-            color = Colors.accent,
-            fontSize = TextStyles.subhead,
-            fontWeight = FontWeight.Medium,
-        )
-    }
+private fun StatusPill(text: String, color: Color) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = color,
+        maxLines = 1,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.16f)).padding(horizontal = 12.dp, vertical = 6.dp),
+    )
 }
 
 @Composable
 private fun EmptyTabs(text: String, canOpen: Boolean, onOpen: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(Radius.card)).background(Colors.surface)
-            .clickable(enabled = canOpen, onClick = onOpen).padding(start = KEY_MARK, end = 16.dp),
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(segmentShape(1, 2)).background(Colors.surface)
+            .padding(start = 20.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, color = Colors.muted, fontSize = TextStyles.subhead, modifier = Modifier.weight(1f))
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
         if (canOpen) {
-            Text(stringResource(R.string.session_tap_open), color = Colors.accent, fontSize = TextStyles.subhead, fontWeight = FontWeight.Medium)
+            TextButton(onClick = onOpen, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.session_tap_open)) }
         }
     }
 }
@@ -711,59 +835,60 @@ private fun EmptyTabs(text: String, canOpen: Boolean, onOpen: () -> Unit) {
 private fun NotFound(activeOnly: Boolean) {
     Text(
         stringResource(if (activeOnly) R.string.no_activity else R.string.search_none),
-        color = Colors.muted,
-        fontSize = TextStyles.subhead,
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
         textAlign = TextAlign.Center,
     )
 }
 
 /**
- * The controls of the reference, floating over the list: a pill with settings and the activity
- * filter at the bottom left, search on its own at the bottom right. Both are 56 dp, the height of
- * the platform's floating action button, and stand on the page margin.
+ * The list's controls, under the thumb: an expressive floating toolbar with search, the activity
+ * filter and settings, and the button that adds a host. Scrolling down folds it to the button.
  */
 @Composable
-private fun FloatingControls(
+private fun HomeToolbar(
+    expanded: Boolean,
     activeOnly: Boolean,
-    onSettings: () -> Unit,
-    onEye: () -> Unit,
     onSearch: () -> Unit,
+    onActiveOnly: () -> Unit,
+    onSettings: () -> Unit,
+    onAdd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val on = stringResource(R.string.filter_on)
     val off = stringResource(R.string.filter_off)
-    Box(modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = PAGE, vertical = 16.dp)) {
-        Row(
-            Modifier.align(Alignment.BottomStart).floating(RoundedCornerShape(50)).padding(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            RoundButton(R.drawable.ic_settings, stringResource(R.string.settings), onSettings, size = 48.dp, iconSize = 24.dp)
-            Box {
-                RoundButton(
-                    if (activeOnly) R.drawable.ic_eye_filled else R.drawable.ic_eye,
-                    stringResource(R.string.action_show_active),
-                    onEye,
-                    modifier = Modifier.semantics { stateDescription = if (activeOnly) on else off },
-                    tint = if (activeOnly) Colors.accent else Colors.ink,
-                    plate = if (activeOnly) Colors.keyOn else null,
-                    size = 48.dp,
-                    iconSize = 24.dp,
-                )
+    HorizontalFloatingToolbar(
+        expanded = expanded,
+        modifier = modifier,
+        floatingActionButton = {
+            Tip(stringResource(R.string.action_add_host)) {
+                FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onAdd) {
+                    Glyph(R.drawable.ic_add, MaterialTheme.colorScheme.onTertiaryContainer)
+                }
+            }
+        },
+    ) {
+        Tip(stringResource(R.string.action_search)) {
+            IconButton(onClick = onSearch, shapes = IconButtonDefaults.shapes()) { Glyph(R.drawable.ic_search, LocalContentColor.current) }
+        }
+        Tip(stringResource(R.string.action_show_active)) {
+            FilledIconToggleButton(
+                checked = activeOnly,
+                onCheckedChange = { onActiveOnly() },
+                shapes = IconButtonDefaults.toggleableShapes(),
+                modifier = Modifier.semantics { stateDescription = if (activeOnly) on else off },
+            ) {
+                Glyph(if (activeOnly) R.drawable.ic_eye_filled else R.drawable.ic_eye, LocalContentColor.current)
             }
         }
-        RoundButton(
-            R.drawable.ic_search,
-            stringResource(R.string.action_search),
-            onSearch,
-            modifier = Modifier.align(Alignment.BottomEnd).floating(),
-            size = 56.dp,
-            iconSize = 24.dp,
-        )
+        Tip(stringResource(R.string.settings)) {
+            IconButton(onClick = onSettings, shapes = IconButtonDefaults.shapes()) { Glyph(R.drawable.ic_settings, LocalContentColor.current) }
+        }
     }
 }
 
-/** The platform's search bar: a 56 dp pill, back on the left, clear on the right. */
+/** The search, in place of the app bar while it is open: back, the field, and clear. */
 @Composable
 private fun SearchBar(
     query: String,
@@ -772,21 +897,21 @@ private fun SearchBar(
     onClose: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = PAGE, vertical = 8.dp).height(56.dp)
-            .clip(RoundedCornerShape(50)).background(Colors.surface).padding(horizontal = 4.dp),
+        Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = PAGE, vertical = 8.dp).height(56.dp)
+            .clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RoundButton(R.drawable.ic_back, stringResource(R.string.action_back), onClose, size = 48.dp)
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (query.isEmpty()) {
-                Text(stringResource(R.string.search_hint), color = Colors.muted, fontSize = TextStyles.body, maxLines = 1)
+                Text(stringResource(R.string.search_hint), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
             BasicTextField(
                 value = query,
                 onValueChange = onQuery,
                 singleLine = true,
-                textStyle = TextStyle(color = Colors.ink, fontSize = TextStyles.body),
-                cursorBrush = SolidColor(Colors.accent),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
         }
@@ -907,27 +1032,49 @@ private fun SettingsSheet(
     }
 }
 
+/** No hosts yet: a big expressive mark, what to run on the computer, and the one thing to do. */
 @Composable
 private fun EmptyHome(onAdd: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     Column(
         Modifier.fillMaxSize().background(Colors.bg).statusBarsPadding().navigationBarsPadding().padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Glyph(R.drawable.ic_host, Colors.muted, size = 48.dp)
-        Spacer(Modifier.height(16.dp))
-        Text(stringResource(R.string.home_no_hosts), color = Colors.ink, fontSize = TextStyles.display, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(8.dp))
+        Box(
+            Modifier.size(132.dp).reveal(0).clip(MaterialShapes.Cookie9Sided.toShape()).background(scheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Glyph(R.drawable.ic_host, scheme.onPrimaryContainer, size = 56.dp)
+        }
+        Spacer(Modifier.height(28.dp))
+        Text(
+            stringResource(R.string.home_no_hosts),
+            style = MaterialTheme.typography.headlineMediumEmphasized,
+            color = scheme.onSurface,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.reveal(1),
+        )
+        Spacer(Modifier.height(12.dp))
         Text(
             stringResource(R.string.home_no_hosts_body),
-            color = Colors.muted,
-            fontSize = TextStyles.label,
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.onSurfaceVariant,
             fontFamily = FontFamily.Monospace,
-            lineHeight = labelLeading,
             textAlign = TextAlign.Center,
+            modifier = Modifier.reveal(2).clip(RoundedCornerShape(16.dp)).background(scheme.surfaceContainerHigh).padding(16.dp),
         )
         Spacer(Modifier.height(32.dp))
-        PrimaryButton(stringResource(R.string.action_add_host), onClick = onAdd)
+        Button(
+            onClick = onAdd,
+            shapes = ButtonDefaults.shapes(),
+            modifier = Modifier.reveal(3).heightIn(min = ButtonDefaults.MediumContainerHeight),
+            contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.MediumContainerHeight),
+        ) {
+            Glyph(R.drawable.ic_add, scheme.onPrimary, size = ButtonDefaults.iconSizeFor(ButtonDefaults.MediumContainerHeight))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.action_add_host), style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
+        }
     }
 }
 

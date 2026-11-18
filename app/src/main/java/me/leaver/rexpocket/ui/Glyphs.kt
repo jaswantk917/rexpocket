@@ -92,6 +92,22 @@ internal fun RoundButton(
 }
 
 /**
+ * Names an icon-only control in a tooltip, on hover or long press. Not focusable: a focusable
+ * tooltip is its own window and would take the keyboard from the terminal.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun Tip(label: String, content: @Composable () -> Unit) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = { PlainTooltip { Text(label) } },
+        state = rememberTooltipState(),
+        focusable = false,
+        content = content,
+    )
+}
+
+/**
  * The surface of a control that floats over content - a pill or a circle. A soft shadow in the day;
  * at night, where a shadow does not show, a lighter fill and a hairline edge do the same job.
  */

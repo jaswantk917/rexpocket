@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
@@ -76,6 +77,8 @@ internal object AppFont {
 @Composable
 internal fun rememberAppFont(wanted: Boolean): FontFamily? {
     val context = LocalContext.current
+    // Previews and screenshot tests render without a network or a real files directory.
+    if (LocalInspectionMode.current) return null
     var family by remember { mutableStateOf(AppFont.cached(context)) }
     LaunchedEffect(wanted) {
         if (wanted && family == null) family = AppFont.download(context)

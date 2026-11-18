@@ -251,4 +251,11 @@
     <string name="update_install">安装</string>
     <string name="update_later">稍后</string>
     <string name="update_allow_install">请允许 RexPocket 安装应用，然后再点一次安装。</string>
+    <string name="home_title">Rex</string>
+    <string name="action_connect">连接</string>
+    <string name="action_fold">折叠</string>
+    <plurals name="host_count">
+        <item quantity="other">%d 台主机</item>
+    </plurals>
+    <string name="home_activity">%1$d 个运行中 · %2$d 个等你处理</string>
 </resources>

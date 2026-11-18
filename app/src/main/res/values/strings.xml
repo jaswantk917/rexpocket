@@ -254,4 +254,12 @@
     <string name="update_install">Install</string>
     <string name="update_later">Later</string>
     <string name="update_allow_install">Allow RexPocket to install apps, then tap Install again.</string>
+    <string name="home_title">Rex</string>
+    <string name="action_connect">Connect</string>
+    <string name="action_fold">Fold</string>
+    <plurals name="host_count">
+        <item quantity="one">%d host</item>
+        <item quantity="other">%d hosts</item>
+    </plurals>
+    <string name="home_activity">%1$d working · %2$d need you</string>
 </resources>
