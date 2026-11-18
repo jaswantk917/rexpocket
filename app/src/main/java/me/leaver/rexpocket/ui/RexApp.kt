@@ -1,5 +1,11 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.window.DialogProperties
+import androidx.navigation3.scene.DialogSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.ui.platform.LocalDensity
@@ -57,7 +63,7 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
     val terminalTypeface by model.terminalTypeface.collectAsState()
     val terminalFont by model.terminalFont.collectAsState()
     var fontSettingsOpen by remember { mutableStateOf(false) }
-    var settingsOpen by remember { mutableStateOf(false) }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
     val tailscale by model.tailscale.collectAsState()
     val tailscaleStatus by model.tailscaleStatus.collectAsState()
     val tailnetError by model.tailnetError.collectAsState()
@@ -157,8 +163,12 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
             // Navigation 3: the host list is the list pane and the terminal the detail pane, side by
             // side when the window has room for both, one at a time when it does not. The back stack
             // follows the model's route, which reconnects, alerts and a closed session also move.
-            val backStack = remember(route) {
-                if (route == Route.Term) listOf<NavKey>(HostsKey, TerminalKey) else listOf<NavKey>(HostsKey)
+            val backStack = remember(route, settingsOpen) {
+                buildList<NavKey> {
+                    add(HostsKey)
+                    if (route == Route.Term) add(TerminalKey)
+                    if (settingsOpen) add(SettingsKey)
+                }
             }
             val directive = rememberPaneDirective()
             val twoPanes = directive.maxHorizontalPartitions > 1
@@ -166,8 +176,8 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
             val slide = with(LocalDensity.current) { NAV_SLIDE.roundToPx() }
             NavDisplay(
                 backStack = backStack,
-                onBack = { model.showHome() },
-                sceneStrategies = listOf(strategy),
+                onBack = { if (settingsOpen) settingsOpen = false else model.showHome() },
+                sceneStrategies = listOf(DialogSceneStrategy(), strategy),
                 transitionSpec = { navForward(slide) },
                 popTransitionSpec = { navBack(slide) },
                 predictivePopTransitionSpec = { navBack(slide) },
@@ -185,6 +195,40 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     entry<TerminalKey>(metadata = ListDetailSceneStrategy.detailPane()) {
                         // Beside the list there is no back button: the list is the way back.
                         term(twoPanes)
+                    }
+                    entry<SettingsKey>(
+                        // Beside the list, settings float over both panes as a dialog; on a phone they
+                        // are a screen of their own.
+                        metadata = if (twoPanes) DialogSceneStrategy.dialog(DialogProperties(usePlatformDefaultWidth = false)) else emptyMap(),
+                    ) {
+                        val settings: @Composable () -> Unit = {
+                            Settings(
+                                onBack = { settingsOpen = false },
+                                showBack = !twoPanes,
+                                appearance = appearance,
+                                onAppearance = model::setAppearance,
+                                terminalFont = terminalFont,
+                                tailscale = tailscale,
+                                tailscaleStatus = tailscaleStatus,
+                                tailnetError = tailnetError,
+                                onTailscale = { tailscaleOpen = true },
+                                alerts = alerts,
+                                onAlerts = model::setAlerts,
+                                keyBar = keyBar,
+                                onKeyBar = model::setKeyBar,
+                                onFontSettings = { fontSettingsOpen = true },
+                                onDiagnosticsReport = { limit -> model.diagnosticReport(limit) },
+                                update = update,
+                                onUpdate = { updateTapped(update) },
+                                updateChannel = updateChannel,
+                                onUpdateChannel = model::setUpdateChannel,
+                            )
+                        }
+                        if (twoPanes) {
+                            Box(Modifier.widthIn(max = 600.dp).fillMaxWidth(0.9f).fillMaxHeight(0.9f).clip(RoundedCornerShape(28.dp))) { settings() }
+                        } else {
+                            settings()
+                        }
                     }
                 },
             )
@@ -207,24 +251,6 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                 onLater = { offeredOnce = offeredOnce + offerKey },
             )
         }
-        Settings(
-            open = settingsOpen,
-            onClose = { settingsOpen = false },
-            tailscale = tailscale,
-            tailscaleStatus = tailscaleStatus,
-            tailnetError = tailnetError,
-            onTailscale = { tailscaleOpen = true },
-            alerts = alerts,
-            onAlerts = model::setAlerts,
-            keyBar = keyBar,
-            onKeyBar = model::setKeyBar,
-            onFontSettings = { fontSettingsOpen = true },
-            onDiagnosticsReport = { limit -> model.diagnosticReport(limit) },
-            update = update,
-            onUpdate = { updateTapped(update) },
-            updateChannel = updateChannel,
-            onUpdateChannel = model::setUpdateChannel,
-        )
         if (fontSettingsOpen) {
             FontSettingsDialog(terminalFont, model::selectTerminalFont) { fontSettingsOpen = false }
         }

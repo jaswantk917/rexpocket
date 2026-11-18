@@ -28,6 +28,9 @@ internal data object HostsKey : NavKey
 @Serializable
 internal data object TerminalKey : NavKey
 
+@Serializable
+internal data object SettingsKey : NavKey
+
 /**
  * When the list and the terminal stand side by side: an expanded window that is not short. A
  * phone on its side is wide enough by class but has no height for two panes, and a terminal

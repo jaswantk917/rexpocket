@@ -258,4 +258,19 @@
         <item quantity="other">%d 台主机</item>
     </plurals>
     <string name="home_activity">%1$d 个运行中 · %2$d 个等你处理</string>
+    <string name="settings_group_appearance">外观</string>
+    <string name="appearance_scheme">配色</string>
+    <string name="appearance_scheme_wallpaper">跟随壁纸</string>
+    <string name="appearance_scheme_rex">Rex 绿</string>
+    <string name="appearance_scheme_blue">蓝</string>
+    <string name="appearance_scheme_violet">紫</string>
+    <string name="appearance_scheme_amber">琥珀</string>
+    <string name="appearance_scheme_slate">石板灰</string>
+    <string name="appearance_pure_black">纯黑</string>
+    <string name="appearance_pure_black_detail">手机为深色时使用纯黑背景</string>
+    <string name="appearance_app_font">Google Sans Flex</string>
+    <string name="appearance_app_font_detail">应用字体；关闭则使用系统字体</string>
+    <string name="keybar_always_detail">连接键盘时仍显示按键栏</string>
+    <string name="alerts_detail">智能体完成或需要我时通知</string>
+    <string name="update_channel_detail">预览版更早收到新版本</string>
 </resources>

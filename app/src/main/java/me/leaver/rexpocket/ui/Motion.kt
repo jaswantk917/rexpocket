@@ -1,5 +1,6 @@
 package me.leaver.rexpocket.ui
 
+import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.compose.animation.core.Animatable
@@ -87,14 +88,20 @@ internal fun Modifier.reveal(index: Int): Modifier {
  */
 internal object Haptics {
     fun toggle(view: View, on: Boolean) {
-        view.performHapticFeedback(if (on) HapticFeedbackConstants.TOGGLE_ON else HapticFeedbackConstants.TOGGLE_OFF)
+        view.performHapticFeedback(
+            when {
+                Build.VERSION.SDK_INT < 34 -> HapticFeedbackConstants.CLOCK_TICK
+                on -> HapticFeedbackConstants.TOGGLE_ON
+                else -> HapticFeedbackConstants.TOGGLE_OFF
+            },
+        )
     }
 
     fun tick(view: View) {
-        view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
+        view.performHapticFeedback(if (Build.VERSION.SDK_INT >= 34) HapticFeedbackConstants.SEGMENT_TICK else HapticFeedbackConstants.CLOCK_TICK)
     }
 
     fun confirm(view: View) {
-        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        view.performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY)
     }
 }

@@ -262,4 +262,19 @@
         <item quantity="other">%d hosts</item>
     </plurals>
     <string name="home_activity">%1$d working · %2$d need you</string>
+    <string name="settings_group_appearance">Appearance</string>
+    <string name="appearance_scheme">Colours</string>
+    <string name="appearance_scheme_wallpaper">From your wallpaper</string>
+    <string name="appearance_scheme_rex">Rex green</string>
+    <string name="appearance_scheme_blue">Blue</string>
+    <string name="appearance_scheme_violet">Violet</string>
+    <string name="appearance_scheme_amber">Amber</string>
+    <string name="appearance_scheme_slate">Slate</string>
+    <string name="appearance_pure_black">Pure black</string>
+    <string name="appearance_pure_black_detail">Black surfaces when the phone is dark</string>
+    <string name="appearance_app_font">Google Sans Flex</string>
+    <string name="appearance_app_font_detail">The app\'s typeface; off uses the phone\'s</string>
+    <string name="keybar_always_detail">Keep the key bar with a keyboard attached</string>
+    <string name="alerts_detail">Tell me when an agent finishes or needs me</string>
+    <string name="update_channel_detail">Preview gets new builds first</string>
 </resources>

@@ -1,5 +1,8 @@
 package me.leaver.rexpocket.ui
 
+import me.leaver.rexpocket.data.TERMINAL_FAMILIES
+import me.leaver.rexpocket.data.TerminalFontState
+import me.leaver.rexpocket.data.Appearance
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
@@ -419,8 +422,11 @@ internal fun HomeScreen(
  */
 @Composable
 internal fun Settings(
-    open: Boolean,
-    onClose: () -> Unit,
+    onBack: () -> Unit,
+    showBack: Boolean,
+    appearance: Appearance,
+    onAppearance: (Appearance) -> Unit,
+    terminalFont: TerminalFontState,
     tailscale: TailscaleSettings,
     tailscaleStatus: TailscaleStatus,
     tailnetError: String?,
@@ -438,7 +444,6 @@ internal fun Settings(
 ) {
     val context = LocalContext.current
     // Android 13 asks for notifications at run time; alerts come on once the person allows them.
-    // The request lives here, not in the settings sheet: the sheet is gone before the answer comes.
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) onAlerts(true) else toast(context, context.getString(R.string.alerts_blocked))
     }
@@ -454,33 +459,39 @@ internal fun Settings(
     }
     var diagnostics by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(Diagnostics.capture(context) != null) }
+    val joined = tailscale.enabled && tailscaleStatus.backendState == "Running"
+    val tailnet = when {
+        tailnetError != null -> stringResource(R.string.tailscale_state_failed)
+        joined -> stringResource(R.string.tailscale_state_running)
+        tailscale.enabled -> tailnetState(tailscaleStatus)
+        else -> stringResource(R.string.tailscale_not_joined)
+    }
+    val fontName = terminalFont.selected?.let { id -> TERMINAL_FAMILIES.firstOrNull { it.id == id }?.label }
+        ?: stringResource(R.string.terminal_font_system)
 
-    if (open) {
-        SettingsSheet(
-            tailscale = tailscale,
-            tailscaleStatus = tailscaleStatus,
-            tailnetError = tailnetError,
-            onDismiss = onClose,
-            onTailscale = {
-                onClose()
-                onTailscale()
-            },
+    SettingsScreen(
+        SettingsModel(
+            appearance = appearance,
+            onAppearance = onAppearance,
+            tailnet = tailnet,
+            onTailscale = onTailscale,
             alerts = alerts,
             onAlerts = toggleAlerts,
             keyBar = keyBar,
             onKeyBar = onKeyBar,
-            onFontSettings = onFontSettings,
+            terminalFont = fontName,
+            onTerminalFont = onFontSettings,
             recording = recording,
-            onDiagnostics = {
-                onClose()
-                diagnostics = true
-            },
+            onDiagnostics = { diagnostics = true },
             update = update,
-            onUpdate = { onUpdate() },
+            onUpdate = onUpdate,
             channel = updateChannel,
             onChannel = onUpdateChannel,
-        )
-    }
+            onSource = { openLink(context, SOURCE_URL) },
+        ),
+        onBack = onBack,
+        showBack = showBack,
+    )
 
     if (diagnostics) {
         DiagnosticsSheet(
@@ -921,116 +932,6 @@ private fun SearchBar(
     }
 }
 
-@Composable
-private fun SettingsSheet(
-    tailscale: TailscaleSettings,
-    tailscaleStatus: TailscaleStatus,
-    tailnetError: String?,
-    onDismiss: () -> Unit,
-    onTailscale: () -> Unit,
-    alerts: Boolean,
-    onAlerts: () -> Unit,
-    keyBar: Boolean,
-    onKeyBar: (Boolean) -> Unit,
-    onFontSettings: () -> Unit,
-    recording: Boolean,
-    onDiagnostics: () -> Unit,
-    update: UpdateState,
-    onUpdate: () -> Unit,
-    channel: UpdateChannel,
-    onChannel: (UpdateChannel) -> Unit,
-) {
-    val context = LocalContext.current
-    val joined = tailscale.enabled && tailscaleStatus.backendState == "Running"
-    // Said on the tap, because the row's own detail is the only other sign the channel moved.
-    val switchedToStable = stringResource(R.string.update_channel_switched_stable)
-    val switchedToPreview = stringResource(R.string.update_channel_switched_preview)
-    ActionSheet(onDismiss = onDismiss, title = stringResource(R.string.settings)) {
-        // Four cards, each one answer to a different question: how the phone reaches a computer,
-        // what the terminal looks and feels like, which build it installs, and what the app is. A
-        // flat list of rows made every one of them equally far away; adding a host is not here at
-        // all, because the list it belongs to has its own + button.
-        Group(stringResource(R.string.settings_group_connection)) {
-            SheetItem(
-                label = stringResource(R.string.tailscale_title),
-                icon = R.drawable.ic_tailnet,
-                detail = when {
-                    tailnetError != null -> stringResource(R.string.tailscale_state_failed)
-                    joined -> stringResource(R.string.tailscale_state_running)
-                    tailscale.enabled -> tailnetState(tailscaleStatus)
-                    else -> stringResource(R.string.tailscale_not_joined)
-                },
-                onClick = onTailscale,
-            )
-            // Alerts are the connection kept up in the background, so they sit with the way in.
-            SheetItem(
-                label = stringResource(R.string.alerts_title),
-                icon = R.drawable.ic_notifications,
-                detail = stringResource(if (alerts) R.string.alerts_on else R.string.alerts_off),
-                keepOpen = true,
-                onClick = onAlerts,
-            )
-        }
-        Group(stringResource(R.string.settings_group_terminal)) {
-            SheetItem(
-                label = stringResource(R.string.keybar_title),
-                icon = R.drawable.ic_keyboard,
-                detail = stringResource(if (keyBar) R.string.keybar_always else R.string.keybar_auto),
-                keepOpen = true,
-                onClick = { onKeyBar(!keyBar) },
-            )
-            SheetItem(stringResource(R.string.terminal_font_title), icon = R.drawable.ic_settings, onClick = onFontSettings)
-        }
-        Group(stringResource(R.string.settings_group_version)) {
-            // The channel first: it is what the row under it looks on.
-            SheetItem(
-                label = stringResource(R.string.update_channel),
-                icon = R.drawable.ic_swap,
-                detail = stringResource(
-                    if (channel == UpdateChannel.Preview) R.string.update_channel_preview else R.string.update_channel_stable,
-                ),
-                keepOpen = true,
-                onClick = {
-                    val next = if (channel == UpdateChannel.Preview) UpdateChannel.Stable else UpdateChannel.Preview
-                    onChannel(next)
-                    toast(context, if (next == UpdateChannel.Preview) switchedToPreview else switchedToStable)
-                },
-            )
-            SheetItem(
-                label = stringResource(R.string.update_title),
-                icon = R.drawable.ic_arrow_down,
-                detail = updateDetail(update),
-                keepOpen = true,
-                onClick = onUpdate,
-            )
-        }
-        // About the app itself: what it recorded, where its code is, and what it is built from.
-        Group(stringResource(R.string.settings_group_about)) {
-            SheetItem(
-                label = stringResource(R.string.diagnostics),
-                detail = stringResource(if (recording) R.string.diagnostics_state_on else R.string.diagnostics_state_off),
-                icon = R.drawable.ic_build,
-                onClick = onDiagnostics,
-            )
-            SheetItem(stringResource(R.string.settings_source), icon = R.drawable.ic_open_in_new) { openLink(context, SOURCE_URL) }
-        }
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
-            Text(
-                "RexPocket ${BuildConfig.VERSION_NAME}",
-                color = Colors.muted,
-                fontSize = TextStyles.label,
-                fontWeight = FontWeight.Medium,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                stringResource(R.string.settings_credits),
-                color = Colors.muted,
-                fontSize = TextStyles.label,
-                lineHeight = labelLeading,
-            )
-        }
-    }
-}
 
 /** No hosts yet: a big expressive mark, what to run on the computer, and the one thing to do. */
 @Composable
