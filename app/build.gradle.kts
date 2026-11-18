@@ -52,6 +52,20 @@ android {
         }
     }
 
+    // Screenshots of each screen at the form factors the adaptive guidance names, rendered by
+    // Layoutlib without a device: ./gradlew updateScreenshotTestDefaultDebugTestSuite
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        screenshotTests.create("screenshotTest") {
+            engineVersion = "0.0.1-alpha17"
+            targetVariants.add("debug")
+            dependencies {
+                implementation("androidx.compose.ui:ui-tooling")
+                implementation("com.android.tools.screenshot:screenshot-validation-api:0.0.1-alpha17")
+            }
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -141,6 +155,8 @@ dependencies {
     implementation(project(":core"))
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.ui:ui-text-google-fonts")
     implementation("androidx.compose.material3:material3:1.5.0-rc01")
     // What the window is wide enough for, and the list beside its pane as Navigation 3 scenes.
@@ -159,4 +175,10 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // The official tailscale.com tsnet library behind the tailnet/ Go module, see tools/build-tailnet.sh.
     implementation(files("libs/tailnet.aar"))
+}
+
+// AGP 9 leaves the release variant without unit tests, which the preview renderer needs to package
+// resources; the tests themselves still run on debug only.
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) { it.hostTests.values.forEach { test -> test.enable = true } }
 }
