@@ -108,14 +108,13 @@ internal fun Tip(label: String, content: @Composable () -> Unit) {
 }
 
 /**
- * The surface of a control that floats over content - a pill or a circle. A soft shadow in the day;
- * at night, where a shadow does not show, a lighter fill and a hairline edge do the same job.
+ * The surface of a control that floats over content - a pill or a circle: the scheme's high container,
+ * lifted by a soft shadow in the day and by its tone alone at night.
  */
 internal fun Modifier.floating(shape: androidx.compose.ui.graphics.Shape = CircleShape): Modifier =
-    this.shadow(if (Colors.isDark) 0.dp else 6.dp, shape, clip = false, ambientColor = Colors.shadow, spotColor = Colors.shadow)
+    this.shadow(if (Colors.isDark) 0.dp else 3.dp, shape, clip = false, ambientColor = Colors.shadow, spotColor = Colors.shadow)
         .clip(shape)
         .background(Colors.raised)
-        .border(1.dp, Colors.edge, shape)
 
 /**
  * The terminal tile: a dark rounded square with a prompt on it, the one mark the app shares with a

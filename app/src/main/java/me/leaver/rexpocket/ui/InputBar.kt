@@ -1,5 +1,8 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlinx.coroutines.coroutineScope
@@ -555,11 +558,24 @@ private fun CtrlKey(latch: Latch, modifier: Modifier, onTap: () -> Unit, onChord
         }
     }
 
+    // Shaped like Material's toggle buttons: a pill at rest that squares up as it latches, more
+    // when locked; tonal once, filled locked.
+    val corner by animateDpAsState(
+        when {
+            pressed -> 8.dp
+            latch == Latch.Locked -> 10.dp
+            latch == Latch.Once -> 14.dp
+            else -> KEY_HEIGHT / 2
+        },
+        MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "ctrl-shape",
+    )
+    val plate by animateColorAsState(if (pressed || open) Colors.keyOn else modPlate(latch), MaterialTheme.motionScheme.fastEffectsSpec(), label = "ctrl-plate")
     Box(
         modifier.height(KEY_HEIGHT)
             .onGloballyPositioned { anchor = it.boundsInWindow() }
-            .clip(RoundedCornerShape(Radius.chip))
-            .background(if (pressed || open) Colors.keyOn else modPlate(latch))
+            .clip(RoundedCornerShape(corner))
+            .background(plate)
             .semantics {
                 contentDescription = label
                 stateDescription = state
