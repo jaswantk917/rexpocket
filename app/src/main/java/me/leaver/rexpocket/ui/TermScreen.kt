@@ -1,5 +1,12 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.semantics.onClick
 import android.os.SystemClock
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
@@ -135,8 +142,6 @@ internal enum class Level { Session, Tab, Pane }
 /** The bottom sheet open over the terminal. */
 internal sealed interface Sheet {
     data object Sessions : Sheet
-    data object Actions : Sheet
-    data object Navigator : Sheet
     data class TabActions(val windowId: String) : Sheet
     data class PaneActions(val blockId: String) : Sheet
 }
@@ -290,19 +295,96 @@ internal fun TermScreen(
     val density = LocalDensity.current
     val slide = imeShift(imeHeight(), panePx)
 
-    Box(Modifier.fillMaxSize().background(Colors.terminal).statusBarsPadding().navigationBarsPadding()) {
+    // The tab menu, from the title and from the tab chip: every tab with what it is doing, this
+    // tab's panes, and a new tab - the session's map, anchored where it was asked for.
+    val tabMenu: @Composable (Boolean, () -> Unit) -> Unit = { expanded, dismiss ->
+        DropdownMenu(expanded = expanded && view != null, onDismissRequest = dismiss, shape = RoundedCornerShape(20.dp)) {
+            if (view != null) {
+                view.windows.forEach { window ->
+                    val activity = window.blocks.firstNotNullOfOrNull { b -> state.blockStatus[b.id]?.takeIf { it.state == "working" || it.state == "blocked" } }
+                    DropdownMenuItem(
+                        text = { Text(tabTitle(view, window, state), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (window.id == tab?.id) FontWeight.SemiBold else null) },
+                        leadingIcon = { ProgramTile(tabProgram(window, state), size = 24.dp) },
+                        trailingIcon = {
+                            when {
+                                window.id == tab?.id -> Glyph(R.drawable.ic_check, MaterialTheme.colorScheme.primary)
+                                activity != null -> Dot(statusTint(activity), 8.dp)
+                            }
+                        },
+                        onClick = {
+                            dismiss()
+                            if (window.id != view.activeWindowId) onAct { focusWindow(window.id) }
+                        },
+                    )
+                }
+                if (panes.size > 1) {
+                    HorizontalDivider()
+                    panes.forEachIndexed { index, block ->
+                        val record = state.blockStatus[block.id]
+                        DropdownMenuItem(
+                            text = { Text("${index + 1}  ${paneTitle(block, record, state.programs[block.id])}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            leadingIcon = { ProgramTile(state.programs[block.id], size = 24.dp) },
+                            trailingIcon = { record?.let { r -> statusWord(r)?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = statusTint(r)) } } },
+                            onClick = {
+                                dismiss()
+                                if (block.id != focused?.id) onAct { focusBlock(block.id) }
+                            },
+                        )
+                    }
+                }
+                HorizontalDivider()
+                MenuItem(stringResource(R.string.menu_new_tab), R.drawable.ic_add) { dismiss(); onAct { newWindow() } }
+                MenuItem(stringResource(R.string.header_sessions), R.drawable.ic_sessions) { dismiss(); sheet = Sheet.Sessions }
+            }
+        }
+    }
+    // Everything else the session can do, in Android's anchored menu, grouped by what it acts on.
+    val overflow: @Composable (Boolean, () -> Unit) -> Unit = { expanded, dismiss ->
+        DropdownMenu(expanded = expanded, onDismissRequest = dismiss, shape = RoundedCornerShape(20.dp)) {
+            if (focused != null) {
+                MenuItem(stringResource(R.string.menu_rename_pane), R.drawable.ic_edit) { dismiss(); rename = Rename(Level.Pane, focused.id, focused.label) }
+                MenuItem(stringResource(R.string.menu_close_pane), R.drawable.ic_close, danger = true) { dismiss(); confirm = Confirm(Level.Pane, focused.id, focused.label) }
+                HorizontalDivider()
+            }
+            if (view != null && tab != null) {
+                val title = tabTitle(view, tab, state)
+                MenuItem(stringResource(R.string.menu_rename_tab), R.drawable.ic_edit) { dismiss(); rename = Rename(Level.Tab, tab.id, tab.label) }
+                MenuItem(stringResource(R.string.menu_close_tab), R.drawable.ic_close, danger = true) { dismiss(); confirm = Confirm(Level.Tab, tab.id, title) }
+                HorizontalDivider()
+            }
+            MenuItem(stringResource(R.string.header_sessions), R.drawable.ic_sessions) { dismiss(); sheet = Sheet.Sessions }
+            if (view != null) {
+                MenuItem(stringResource(R.string.menu_rename_session), R.drawable.ic_edit) { dismiss(); rename = Rename(Level.Session, view.sessionId, view.label) }
+                MenuItem(stringResource(R.string.menu_kill_session), R.drawable.ic_delete, danger = true) { dismiss(); confirm = Confirm(Level.Session, view.sessionId, view.label) }
+            }
+            HorizontalDivider()
+            // Paste is here as well as on the keys: a keyboard on the desk takes the keys away, and a
+            // chord only reaches the program, never the phone's clipboard.
+            MenuItem(stringResource(R.string.key_paste), R.drawable.ic_paste) { dismiss(); pasteClipboard() }
+            if (upload?.running != true) {
+                MenuItem(stringResource(R.string.upload_attach), R.drawable.ic_attach_file) { dismiss(); filePicker.launch("*/*") }
+            }
+            if (dock) {
+                MenuItem(stringResource(R.string.key_row_hide), R.drawable.ic_keyboard_hide) { dismiss(); keyBarChoice = false }
+            } else {
+                MenuItem(stringResource(R.string.key_row_show), R.drawable.ic_keyboard) { dismiss(); keyBarChoice = true }
+            }
+            MenuItem(stringResource(R.string.settings), R.drawable.ic_settings) { dismiss(); onSettings() }
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(Colors.terminal).navigationBarsPadding()) {
         Column(Modifier.fillMaxSize().padding(bottom = with(density) { bottomPx.toDp() })) {
-            SessionTopBar(
+            TermTopBar(
                 state = state,
                 view = view,
                 tab = tab,
                 status = status,
                 onBack = onBack,
                 showBack = !embedded,
-                onNavigate = { if (view != null) sheet = Sheet.Navigator },
+                tabMenu = tabMenu,
                 onHolder = { if (state.owning) onAct { releasePane() } else onAct { takeOver() } },
-                onMore = { sheet = Sheet.Actions },
-                onShowKeys = if (dock) null else { { keyBarChoice = true } },
+                overflow = overflow,
             )
             TermBanner(state, onRetry = onRetry, onDismiss = onDismissNotice)
             // The pane sits on its own paper: white in the day, the page at night, edge to edge, the
@@ -347,16 +429,18 @@ internal fun TermScreen(
         // keyboard can lift this stack without the terminal ever changing shape.
         Box(Modifier.align(Alignment.BottomCenter).imePadding()) {
             Column(Modifier.onSizeChanged { bottomPx = it.height }) {
-                if (panes.size > 1) {
-                    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
-                        PaneBar(
-                            tab = tab,
-                            focused = focused,
-                            status = state.blockStatus,
-                            programs = state.programs,
-                            onSelect = { block -> onAct { focusBlock(block.id) } },
-                        )
-                    }
+                ReachableWidth {
+                    PaneStrip(
+                        state = state,
+                        view = view,
+                        tab = tab,
+                        focused = focused,
+                        onSelect = { block -> onAct { focusBlock(block.id) } },
+                        onPaneMenu = { block -> sheet = Sheet.PaneActions(block.id) },
+                        onSplit = { vertical -> onAct { split(vertical = vertical) } },
+                        onShowKeys = if (dock) null else { { keyBarChoice = true } },
+                        tabMenu = tabMenu,
+                    )
                 }
                 upload?.let {
                     ReachableWidth {
@@ -400,95 +484,6 @@ internal fun TermScreen(
             onOpen = { id -> if (id != state.activeSessionId) onOpenSession(id) },
             onCreate = { onAct { createShell(null) } },
         )
-        Sheet.Actions -> ActionSheet(onDismiss = { sheet = null }) {
-            Group(stringResource(R.string.level_pane)) {
-                SheetItem(stringResource(R.string.menu_split_right), icon = R.drawable.ic_split_right) { onAct { split(vertical = false) } }
-                SheetItem(stringResource(R.string.menu_split_below), icon = R.drawable.ic_split_below) { onAct { split(vertical = true) } }
-                if (focused != null) {
-                    SheetItem(stringResource(R.string.menu_rename_pane), icon = R.drawable.ic_edit) { rename = Rename(Level.Pane, focused.id, focused.label) }
-                    SheetItem(stringResource(R.string.menu_close_pane), Colors.danger, icon = R.drawable.ic_close) {
-                        confirm = Confirm(Level.Pane, focused.id, focused.label)
-                    }
-                }
-            }
-            // Paste is here as well as on the key bar, because a keyboard on the desk takes the bar
-            // away and a chord only reaches the program, never the phone's clipboard.
-            Group {
-                if (upload?.running != true) {
-                    SheetItem(stringResource(R.string.upload_attach), icon = R.drawable.ic_attach_file) { filePicker.launch("*/*") }
-                }
-                SheetItem(stringResource(R.string.key_paste), icon = R.drawable.ic_paste) { pasteClipboard() }
-            }
-            Group(stringResource(R.string.level_tab)) {
-                SheetItem(stringResource(R.string.menu_new_tab), icon = R.drawable.ic_add) { onAct { newWindow() } }
-                if (view != null && tab != null) {
-                    val title = tabTitle(view, tab, state)
-                    SheetItem(stringResource(R.string.menu_rename_tab), icon = R.drawable.ic_edit) { rename = Rename(Level.Tab, tab.id, tab.label) }
-                    SheetItem(stringResource(R.string.menu_close_tab), Colors.danger, icon = R.drawable.ic_close) { confirm = Confirm(Level.Tab, tab.id, title) }
-                }
-            }
-            Group(stringResource(R.string.level_session)) {
-                SheetItem(stringResource(R.string.header_sessions), icon = R.drawable.ic_sessions) { sheet = Sheet.Sessions }
-                if (view != null) {
-                    SheetItem(stringResource(R.string.menu_rename_session), icon = R.drawable.ic_edit) {
-                        rename = Rename(Level.Session, view.sessionId, view.label)
-                    }
-                    SheetItem(stringResource(R.string.menu_kill_session), Colors.danger, icon = R.drawable.ic_delete) {
-                        confirm = Confirm(Level.Session, view.sessionId, view.label)
-                    }
-                }
-            }
-            // Also on the host list's pill; here because on a phone the list is not on screen.
-            Group {
-                if (dock) {
-                    SheetItem(stringResource(R.string.key_row_hide), icon = R.drawable.ic_keyboard_hide) { keyBarChoice = false }
-                } else {
-                    SheetItem(stringResource(R.string.key_row_show), icon = R.drawable.ic_keyboard) { keyBarChoice = true }
-                }
-                SheetItem(stringResource(R.string.settings), icon = R.drawable.ic_settings) {
-                    sheet = null
-                    onSettings()
-                }
-            }
-        }
-        Sheet.Navigator -> if (view != null) {
-            ActionSheet(onDismiss = { sheet = null }, title = view.label) {
-                Group {
-                    SheetItem(stringResource(R.string.header_sessions), detail = pluralStringResource(R.plurals.session_count, state.sessions.size, state.sessions.size), icon = R.drawable.ic_sessions) {
-                        sheet = Sheet.Sessions
-                    }
-                }
-                Group(label = stringResource(R.string.group_tabs), icons = false) {
-                    view.windows.forEach { window ->
-                        SheetItem(
-                            label = tabTitle(view, window, state),
-                            detail = window.blocks.size.takeIf { it > 1 }?.let { pluralStringResource(R.plurals.pane_count, it, it) },
-                            marked = window.id == tab?.id,
-                        ) {
-                            if (window.id != view.activeWindowId) onAct { focusWindow(window.id) }
-                        }
-                    }
-                }
-                if (panes.size > 1) {
-                    Group(label = stringResource(R.string.group_panes), icons = false) {
-                        panes.forEachIndexed { index, block ->
-                            SheetItem(
-                                label = "${index + 1}  ${paneTitle(block, state.blockStatus[block.id], state.programs[block.id])}",
-                                detail = state.blockStatus[block.id]?.let { statusWord(it) },
-                                marked = block.id == focused?.id,
-                            ) {
-                                if (block.id != focused?.id) onAct { focusBlock(block.id) }
-                            }
-                        }
-                    }
-                }
-                Group {
-                    SheetItem(stringResource(R.string.menu_new_tab), icon = R.drawable.ic_add) { onAct { newWindow() } }
-                    SheetItem(stringResource(R.string.menu_split_right), icon = R.drawable.ic_split_right) { onAct { split(vertical = false) } }
-                    SheetItem(stringResource(R.string.menu_split_below), icon = R.drawable.ic_split_below) { onAct { split(vertical = true) } }
-                }
-            }
-        }
         is Sheet.TabActions -> {
             // The tab may close on the desktop while its sheet is open; then the sheet goes too.
             val window = view?.windows?.firstOrNull { it.id == open.windowId }
@@ -609,102 +604,168 @@ internal fun TermScreen(
 }
 
 /**
- * The floating top bar of the reference: a round back button, the pane's tile, the tab with the
- * directory it is in, the session under it, and the menu. No bar behind it; the paper is the
- * background. The title block opens the tabs and panes of the session.
+ * The terminal's top bar: a tonal band that frames the pane. Back (not beside the list), the tab's
+ * name over its session and directory - tapping it opens the tab menu - who holds the pane, and the
+ * menu. Fixed height, so the pane's grid never changes for it.
  */
 @Composable
-private fun SessionTopBar(
+private fun TermTopBar(
     state: PocketState,
     view: SessionView?,
     tab: WindowInfo?,
     status: ProgramRecord?,
     onBack: () -> Unit,
-    /** False while the list stands beside this pane: there the pane has no way back to leave. */
     showBack: Boolean,
-    onNavigate: () -> Unit,
+    tabMenu: @Composable (expanded: Boolean, onDismiss: () -> Unit) -> Unit,
     onHolder: () -> Unit,
-    onMore: () -> Unit,
-    /** Brings the key bar back while it is put away; null while it is on screen. */
-    onShowKeys: (() -> Unit)?,
+    overflow: @Composable (expanded: Boolean, onDismiss: () -> Unit) -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val title = when {
         view == null -> state.endpointLabel.ifBlank { stringResource(R.string.app_name) }
         tab != null -> tabTitle(view, tab, state)
         else -> view.label
     }
     val path = state.pwd?.takeIf { it.isNotBlank() }?.let { shortPath(it) }
+    val under = listOfNotNull(view?.label ?: phaseText(state), path).joinToString(" · ")
+    var tabs by remember { mutableStateOf(false) }
+    var more by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp),
+        Modifier.fillMaxWidth().background(scheme.surfaceContainer).statusBarsPadding().height(TOP_BAR).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showBack) {
-            RoundButton(R.drawable.ic_back, stringResource(R.string.action_back), onBack, plate = Colors.key, size = 40.dp)
+            RoundButton(R.drawable.ic_back, stringResource(R.string.action_back), onBack, plate = scheme.surfaceContainerHighest, size = 40.dp)
         } else {
-            Spacer(Modifier.width(4.dp))
-        }
-        Row(
-            Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(Radius.card))
-                .clickable(enabled = view != null, role = Role.Button, onClickLabel = stringResource(R.string.menu_navigate), onClick = onNavigate)
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ProgramTile(tab?.focusedBlock()?.id?.let { state.programs[it] }, size = 36.dp)
             Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        title,
-                        color = Colors.ink,
-                        fontSize = TextStyles.body,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (path != null) {
-                        Spacer(Modifier.width(6.dp))
-                        Text(path, color = Colors.muted, fontSize = TextStyles.subhead, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+        }
+        Box(Modifier.weight(1f)) {
+            Column(
+                Modifier.fillMaxWidth().pressable(RoundedCornerShape(16.dp), enabled = view != null, onClick = { tabs = true })
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                AnimatedContent(title, transitionSpec = { captionSwap() }, label = "tab-title") { text ->
+                    Text(text, style = MaterialTheme.typography.titleMediumEmphasized, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Dot(status?.let { statusTint(it) } ?: phaseTint(state.phase), 6.dp)
                     Spacer(Modifier.width(6.dp))
-                    Text(
-                        view?.label ?: phaseText(state),
-                        color = Colors.muted,
-                        fontSize = TextStyles.label,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    Glyph(R.drawable.ic_expand, Colors.muted, size = 18.dp)
+                    Text(under, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+            tabMenu(tabs) { tabs = false }
         }
-        if (state.phase == Phase.Live) {
-            HolderChip(state.owning, onHolder)
-            Spacer(Modifier.width(4.dp))
+        if (state.phase == Phase.Live) HolderChip(state.owning, onHolder)
+        Box {
+            RoundButton(R.drawable.ic_more, stringResource(R.string.action_more), { more = true }, tint = scheme.onSurfaceVariant, size = 48.dp)
+            overflow(more) { more = false }
         }
-        ShowKeysButton(onShowKeys)
-        RoundButton(R.drawable.ic_more, stringResource(R.string.action_more), onMore, plate = Colors.key, size = 40.dp)
     }
 }
 
-/** The key bar's way back, beside the menu while the bar is put away. */
+/** The top bar's height under the status bar. */
+private val TOP_BAR = 64.dp
+
+/**
+ * The strip under the pane, above the keys: the tab chip (its menu lists the tabs and panes), the
+ * panes of this tab, the two splits, and the way back to the keys while they are put away. It is
+ * always there and always this tall, so splitting or switching never resizes the terminal.
+ */
 @Composable
-private fun ShowKeysButton(onShowKeys: (() -> Unit)?) {
-    AnimatedVisibility(
-        visible = onShowKeys != null,
-        enter = fadeIn() + scaleIn(initialScale = 0.6f),
-        exit = fadeOut() + scaleOut(targetScale = 0.6f),
+private fun PaneStrip(
+    state: PocketState,
+    view: SessionView?,
+    tab: WindowInfo?,
+    focused: BlockInfo?,
+    onSelect: (BlockInfo) -> Unit,
+    onPaneMenu: (BlockInfo) -> Unit,
+    onSplit: (vertical: Boolean) -> Unit,
+    onShowKeys: (() -> Unit)?,
+    tabMenu: @Composable (expanded: Boolean, onDismiss: () -> Unit) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val blocks = tab?.blocks.orEmpty()
+    var tabs by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().height(STRIP).padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row {
-            RoundButton(R.drawable.ic_keyboard, stringResource(R.string.key_row_show), { onShowKeys?.invoke() }, plate = Colors.key, size = 40.dp)
-            Spacer(Modifier.width(4.dp))
+        if (view != null && tab != null) {
+            Box {
+                val index = view.windows.indexOfFirst { it.id == tab.id } + 1
+                Row(
+                    Modifier.height(40.dp).pressable(RoundedCornerShape(50), onClick = { tabs = true })
+                        .background(scheme.surfaceContainerHigh).padding(start = 8.dp, end = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ProgramTile(tabProgram(tab, state), size = 24.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "$index/${view.windows.size}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = scheme.onSurface,
+                        maxLines = 1,
+                    )
+                    Glyph(R.drawable.ic_expand, scheme.onSurfaceVariant, size = 18.dp)
+                }
+                tabMenu(tabs) { tabs = false }
+            }
+        }
+        // The panes of this tab, one segment each: tap to show it, hold for its menu.
+        Row(
+            Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (blocks.size > 1) {
+                blocks.forEachIndexed { index, block ->
+                    val on = block.id == focused?.id
+                    val record = state.blockStatus[block.id]
+                    val fill by animateColorAsState(if (on) scheme.secondaryContainer else scheme.surfaceContainerHigh, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "pane")
+                    val outer = 20.dp
+                    val inner = 6.dp
+                    val shape = RoundedCornerShape(
+                        topStart = if (index == 0) outer else inner, bottomStart = if (index == 0) outer else inner,
+                        topEnd = if (index == blocks.lastIndex) outer else inner, bottomEnd = if (index == blocks.lastIndex) outer else inner,
+                    )
+                    Row(
+                        Modifier.height(40.dp)
+                            .pressable(shape, role = Role.Tab, onLongClick = { onPaneMenu(block) }, onClick = { if (!on) onSelect(block) })
+                            .background(fill).padding(horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ProgramTile(state.programs[block.id], size = 20.dp)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            paneTitle(block, record, state.programs[block.id]),
+                            style = if (on) MaterialTheme.typography.labelLargeEmphasized else MaterialTheme.typography.labelLarge,
+                            color = if (on) scheme.onSecondaryContainer else scheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 96.dp),
+                        )
+                        if (record?.state == "working" || record?.state == "blocked") {
+                            Spacer(Modifier.width(6.dp))
+                            Dot(statusTint(record), 6.dp)
+                        }
+                    }
+                }
+            }
+        }
+        RoundButton(R.drawable.ic_split_right, stringResource(R.string.menu_split_right), { onSplit(false) }, tint = scheme.onSurfaceVariant, size = 40.dp, iconSize = 20.dp)
+        RoundButton(R.drawable.ic_split_below, stringResource(R.string.menu_split_below), { onSplit(true) }, tint = scheme.onSurfaceVariant, size = 40.dp, iconSize = 20.dp)
+        AnimatedVisibility(
+            visible = onShowKeys != null,
+            enter = fadeIn() + scaleIn(initialScale = 0.6f),
+            exit = fadeOut() + scaleOut(targetScale = 0.6f),
+        ) {
+            RoundButton(R.drawable.ic_keyboard, stringResource(R.string.key_row_show), { onShowKeys?.invoke() }, plate = scheme.secondaryContainer, tint = scheme.onSecondaryContainer, size = 40.dp, iconSize = 20.dp)
         }
     }
 }
+
+/** The pane strip's height. */
+private val STRIP = 52.dp
 
 /**
  * Who holds the pane, and the one tap that changes it. While the desk holds it the chip is the
@@ -713,81 +774,18 @@ private fun ShowKeysButton(onShowKeys: (() -> Unit)?) {
  */
 @Composable
 private fun HolderChip(owning: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     val label = stringResource(if (owning) R.string.holder_phone else R.string.action_take_over)
     val action = stringResource(if (owning) R.string.action_release else R.string.action_take_over)
+    val fill by animateColorAsState(if (owning) scheme.surfaceContainerHighest else scheme.primary, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "holder")
     Box(
-        Modifier.height(40.dp).clip(RoundedCornerShape(50))
-            .background(if (owning) Colors.key else Colors.accent)
-            .clickable(role = Role.Button, onClickLabel = action, onClick = onClick)
-            .padding(horizontal = 14.dp),
+        Modifier.height(36.dp).pressable(RoundedCornerShape(50), onClick = onClick)
+            .semantics { onClick(label = action) { onClick(); true } }
+            .background(fill).padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            label,
-            color = if (owning) Colors.muted else Colors.onAccent,
-            fontSize = TextStyles.label,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-        )
-    }
-}
-
-/**
- * The panes of the shown tab, in one floating pill under the pane, as the reference draws them: a
- * segment per pane with the tile of what runs in it and its name, the one on screen on a soft plate
- * in the action colour. Tapping a segment goes there; a horizontal swipe on the pane does the same.
- * Each segment is a full 48 dp target.
- */
-@Composable
-private fun PaneBar(
-    tab: WindowInfo?,
-    focused: BlockInfo?,
-    status: Map<String, ProgramRecord>,
-    programs: Map<String, String>,
-    onSelect: (BlockInfo) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val blocks = tab?.blocks.orEmpty()
-    val scroll = rememberScrollState()
-    val selected = stringResource(R.string.state_selected)
-    Row(
-        modifier.floating(RoundedCornerShape(50)).horizontalScroll(scroll).padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        blocks.forEachIndexed { index, block ->
-            val on = block.id == focused?.id
-            val record = status[block.id]
-            val busy = record?.state == "working" || record?.state == "blocked"
-            Box(
-                Modifier.height(48.dp)
-                    .clickable(role = Role.Tab) { if (!on) onSelect(block) }
-                    .semantics { if (on) stateDescription = selected }
-                    .padding(vertical = 4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(
-                    Modifier.fillMaxHeight().clip(RoundedCornerShape(50))
-                        .then(if (on) Modifier.background(Colors.keyOn) else Modifier)
-                        .padding(start = 6.dp, end = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ProgramTile(programs[block.id], size = 24.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        paneTitle(block, record, programs[block.id]),
-                        color = if (on) Colors.accent else Colors.ink,
-                        fontSize = TextStyles.subhead,
-                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 104.dp),
-                    )
-                    if (busy) {
-                        Spacer(Modifier.width(6.dp))
-                        Dot(statusTint(record), 6.dp)
-                    }
-                }
-            }
+        AnimatedContent(label, transitionSpec = { captionSwap() }, label = "holder-label") { text ->
+            Text(text, style = MaterialTheme.typography.labelLarge, color = if (owning) scheme.onSurfaceVariant else scheme.onPrimary, maxLines = 1)
         }
     }
 }

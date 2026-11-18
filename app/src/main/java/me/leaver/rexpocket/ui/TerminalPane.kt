@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
@@ -74,6 +75,11 @@ internal fun TerminalPane(
     onSwipe: ((forward: Boolean) -> Unit)? = null,
     onError: (Exception) -> Unit = {},
 ) {
+    // Previews and screenshot tests have no native terminal: they get a still picture of one.
+    if (androidx.compose.ui.platform.LocalInspectionMode.current) {
+        PreviewPane(modifier)
+        return
+    }
     val context = LocalContext.current
     // Replaced when Rex sends a new snapshot: a reconnect, or a pane whose stream started over.
     var session by remember(blockId) { mutableStateOf<TerminalSession?>(null) }
@@ -313,4 +319,16 @@ private class InputBatcher(private val send: (ByteArray) -> Unit) {
          */
         const val WINDOW_MS = 16L
     }
+}
+
+/** A few lines of a shell, drawn as text, for previews where libghostty cannot run. */
+@Composable
+private fun PreviewPane(modifier: Modifier) {
+    androidx.compose.material3.Text(
+        "~/Development\n❯ git status\nOn branch feat/on-upstream\nnothing to commit, working tree clean\n❯ █",
+        color = Colors.ink,
+        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+        fontSize = androidx.compose.ui.unit.TextUnit(13f, androidx.compose.ui.unit.TextUnitType.Sp),
+        modifier = modifier.padding(8.dp),
+    )
 }
