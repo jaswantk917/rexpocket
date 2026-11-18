@@ -42,10 +42,8 @@ internal fun rememberPaneDirective(): PaneScaffoldDirective {
     val info = currentWindowAdaptiveInfoV2()
     return remember(info) {
         val base = calculatePaneScaffoldDirective(info)
-        val roomy = info.windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) &&
-            info.windowSizeClass.isHeightAtLeastBreakpoint(WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND)
         base.copy(
-            maxHorizontalPartitions = if (roomy) 2 else 1,
+            maxHorizontalPartitions = if (roomForTwoPanes(info.windowSizeClass)) 2 else 1,
             horizontalPartitionSpacerSize = 0.dp,
         )
     }
@@ -63,3 +61,11 @@ internal fun <T : Any> AnimatedContentTransitionScope<Scene<T>>.navForward(slide
 internal fun <T : Any> AnimatedContentTransitionScope<Scene<T>>.navBack(slide: Int): ContentTransform =
     (slideInHorizontally(tween(450, easing = Emphasized)) { -slide } + fadeIn(tween(83, delayMillis = 50))) togetherWith
         (slideOutHorizontally(tween(450, easing = Emphasized)) { slide } + fadeOut(tween(83, delayMillis = 35)))
+
+/**
+ * Room for the list beside the terminal: an expanded width with at least a medium height. A phone
+ * held sideways is wide enough by its class but has no height for two panes; a foldable keeps one.
+ */
+internal fun roomForTwoPanes(size: WindowSizeClass): Boolean =
+    size.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) &&
+        size.isHeightAtLeastBreakpoint(WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND)
