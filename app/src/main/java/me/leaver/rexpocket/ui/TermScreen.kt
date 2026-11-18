@@ -142,7 +142,6 @@ internal enum class Level { Session, Tab, Pane }
 /** The bottom sheet open over the terminal. */
 internal sealed interface Sheet {
     data object Sessions : Sheet
-    data class TabActions(val windowId: String) : Sheet
     data class PaneActions(val blockId: String) : Sheet
 }
 
@@ -254,7 +253,7 @@ internal fun TermScreen(
 
     // Keys arrived from a keyboard: from then on a newly shown pane takes the focus, so Ctrl+Tab
     // twice, or typing straight after it, does not need a click on the new pane first.
-    var keysTyped by remember { mutableStateOf(false) }
+    var keysTyped by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(keyboard) {
         if (keysTyped) keyboard?.requestFocus()
     }
@@ -425,6 +424,20 @@ internal fun TermScreen(
                 }
             }
         }
+        // The upload card floats over the bottom of the pane, above the strip and keys, so sending a
+        // file never resizes the terminal.
+        Box(Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = with(density) { bottomPx.toDp() } + 8.dp)) {
+            upload?.let {
+                ReachableWidth {
+                    UploadPill(
+                        status = it,
+                        onCancel = onCancelUpload,
+                        onDismiss = onDismissUpload,
+                        onRetry = onRetryUpload,
+                    )
+                }
+            }
+        }
         // The bottom of the screen, on its own: the pane's size is measured above without it, so the
         // keyboard can lift this stack without the terminal ever changing shape.
         Box(Modifier.align(Alignment.BottomCenter).imePadding()) {
@@ -441,16 +454,6 @@ internal fun TermScreen(
                         onShowKeys = if (dock) null else { { keyBarChoice = true } },
                         tabMenu = tabMenu,
                     )
-                }
-                upload?.let {
-                    ReachableWidth {
-                        UploadPill(
-                            status = it,
-                            onCancel = onCancelUpload,
-                            onDismiss = onDismissUpload,
-                            onRetry = onRetryUpload,
-                        )
-                    }
                 }
                 if (dock) {
                     // The dock is one hand's reach wide, whatever the window is: a tablet or a desk
@@ -484,19 +487,6 @@ internal fun TermScreen(
             onOpen = { id -> if (id != state.activeSessionId) onOpenSession(id) },
             onCreate = { onAct { createShell(null) } },
         )
-        is Sheet.TabActions -> {
-            // The tab may close on the desktop while its sheet is open; then the sheet goes too.
-            val window = view?.windows?.firstOrNull { it.id == open.windowId }
-            if (view != null && window != null) {
-                val title = tabTitle(view, window, state)
-                ActionSheet(onDismiss = { sheet = null }, title = title) {
-                    Group {
-                        SheetItem(stringResource(R.string.menu_rename_tab), icon = R.drawable.ic_edit) { rename = Rename(Level.Tab, window.id, window.label) }
-                        SheetItem(stringResource(R.string.menu_close_tab), Colors.danger, icon = R.drawable.ic_close) { confirm = Confirm(Level.Tab, window.id, title) }
-                    }
-                }
-            }
-        }
         is Sheet.PaneActions -> {
             val block = tab?.blocks?.firstOrNull { it.id == open.blockId }
             if (tab != null && block != null) {
@@ -716,7 +706,7 @@ private fun PaneStrip(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (blocks.size > 1) {
-                blocks.forEachIndexed { index, block ->
+                blocks.forEachIndexed { index, block -> key(block.id) {
                     val on = block.id == focused?.id
                     val record = state.blockStatus[block.id]
                     val fill by animateColorAsState(if (on) scheme.secondaryContainer else scheme.surfaceContainerHigh, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "pane")
@@ -747,7 +737,7 @@ private fun PaneStrip(
                             Dot(statusTint(record), 6.dp)
                         }
                     }
-                }
+                } }
             }
         }
         RoundButton(R.drawable.ic_split_right, stringResource(R.string.menu_split_right), { onSplit(false) }, tint = scheme.onSurfaceVariant, size = 40.dp, iconSize = 20.dp)

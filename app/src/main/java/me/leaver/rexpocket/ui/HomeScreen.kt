@@ -447,18 +447,23 @@ internal fun Settings(
     onUpdateChannel: (UpdateChannel) -> Unit,
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
+    val setAlerts = { on: Boolean ->
+        Haptics.toggle(view, on)
+        onAlerts(on)
+    }
     // Android 13 asks for notifications at run time; alerts come on once the person allows them.
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) onAlerts(true) else toast(context, context.getString(R.string.alerts_blocked))
+        if (granted) setAlerts(true) else toast(context, context.getString(R.string.alerts_blocked))
     }
     val toggleAlerts = {
         when {
-            alerts -> onAlerts(false)
+            alerts -> setAlerts(false)
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
                 ask.launch(Manifest.permission.POST_NOTIFICATIONS)
             !Alerts.allowed(context) -> toast(context, context.getString(R.string.alerts_blocked))
-            else -> onAlerts(true)
+            else -> setAlerts(true)
         }
     }
     var diagnostics by remember { mutableStateOf(false) }

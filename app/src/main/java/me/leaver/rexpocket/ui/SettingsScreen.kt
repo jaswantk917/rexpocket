@@ -165,8 +165,9 @@ internal fun SettingsScreen(settings: SettingsModel, onBack: () -> Unit, showBac
             item(key = "connection") {
                 Group(R.string.settings_group_connection, index = 2) {
                     LinkRow(R.drawable.ic_tailnet, stringResource(R.string.tailscale_title), settings.tailnet, Tone.Secondary, settings.onTailscale)
+                    // No tick here: turning alerts on may stop at a permission prompt; the tick comes
+                    // when the switch actually moves.
                     SwitchRow(R.drawable.ic_notifications, R.string.alerts_title, R.string.alerts_detail, settings.alerts, tone = Tone.Secondary) {
-                        Haptics.toggle(view, it)
                         settings.onAlerts()
                     }
                 }

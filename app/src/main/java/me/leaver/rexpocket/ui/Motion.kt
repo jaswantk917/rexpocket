@@ -64,9 +64,11 @@ internal fun Modifier.pressable(
  */
 @Composable
 internal fun Modifier.reveal(index: Int): Modifier {
+    // Decided once, from where the row first appeared: a row that later moves into the first nine
+    // (a fold, a filter) is already there and does not arrive again.
+    var done by rememberSaveable { mutableStateOf(index > 8) }
     // Previews and screenshots show the resting frame.
-    if (index > 8 || LocalInspectionMode.current) return this
-    var done by rememberSaveable { mutableStateOf(false) }
+    if (LocalInspectionMode.current) return this
     val progress = remember { Animatable(if (done) 1f else 0f) }
     val spec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
     LaunchedEffect(Unit) {

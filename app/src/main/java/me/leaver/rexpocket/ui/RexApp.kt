@@ -1,5 +1,13 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.runtime.SideEffect
+import androidx.core.view.WindowCompat
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -197,9 +205,10 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                         term(twoPanes)
                     }
                     entry<SettingsKey>(
-                        // Beside the list, settings float over both panes as a dialog; on a phone they
-                        // are a screen of their own.
-                        metadata = if (twoPanes) DialogSceneStrategy.dialog(DialogProperties(usePlatformDefaultWidth = false)) else emptyMap(),
+                        // A dialog scene in every window, so what is under it stays composed: the
+                        // terminal keeps its stream, scrollback, latched keys and focus. Beside the
+                        // list it is a card over both panes; on a phone it fills the screen.
+                        metadata = DialogSceneStrategy.dialog(DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)),
                     ) {
                         val settings: @Composable () -> Unit = {
                             Settings(
@@ -224,10 +233,11 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                                 onUpdateChannel = model::setUpdateChannel,
                             )
                         }
+                        DialogBars()
                         if (twoPanes) {
                             Box(Modifier.widthIn(max = 600.dp).fillMaxWidth(0.9f).fillMaxHeight(0.9f).clip(RoundedCornerShape(28.dp))) { settings() }
                         } else {
-                            settings()
+                            Box(Modifier.fillMaxSize().enterFromEnd()) { settings() }
                         }
                     }
                 },
@@ -352,4 +362,30 @@ private fun SshHostKeyDialog(
             TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel), color = Colors.muted) }
         },
     )
+}
+
+/** A dialog window edge to edge draws its own bars: their icons follow the theme, as the app's do. */
+@Composable
+private fun DialogBars() {
+    val window = (LocalView.current.parent as? DialogWindowProvider)?.window ?: return
+    val view = LocalView.current
+    val dark = Colors.isDark
+    SideEffect {
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
+        window.setDimAmount(0f)
+    }
+}
+
+/** A full-screen dialog arrives the way a pushed screen does: sliding in from the end, fading up. */
+@Composable
+private fun Modifier.enterFromEnd(): Modifier {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { progress.animateTo(1f, tween(450, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))) }
+    return graphicsLayer {
+        translationX = (1f - progress.value) * NAV_SLIDE.toPx()
+        alpha = progress.value
+    }
 }
