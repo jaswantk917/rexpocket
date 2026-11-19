@@ -10,6 +10,8 @@ import androidx.core.view.WindowCompat
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.clip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.window.DialogProperties
@@ -34,6 +36,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -195,7 +204,7 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                 popTransitionSpec = { navBack(slide) },
                 predictivePopTransitionSpec = { navBack(slide) },
                 entryProvider = entryProvider {
-                    entry<HostsKey>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { NoPaneOpen() })) {
+                    entry<HostsKey>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { PaneCard { NoPaneOpen() } })) {
                         if (twoPanes) {
                             home(route == Route.Term)
                         } else {
@@ -207,7 +216,7 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     }
                     entry<TerminalKey>(metadata = ListDetailSceneStrategy.detailPane()) {
                         // Beside the list there is no back button: the list is the way back.
-                        term(twoPanes)
+                        if (twoPanes) PaneCard { term(true) } else term(false)
                     }
                     entry<SettingsKey>(
                         // A dialog scene in every window, so what is under it stays composed: the
@@ -300,6 +309,24 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
         }
     }
 }
+
+/**
+ * The right side of a two-pane window: the terminal on a rounded sheet of its own, set in from the
+ * window's edges on the page the list sits on, so the two read as panes rather than two halves.
+ */
+@Composable
+internal fun PaneCard(content: @Composable () -> Unit) {
+    Box(
+        Modifier.fillMaxSize().background(Colors.bg)
+            .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Top + WindowInsetsSides.End + WindowInsetsSides.Bottom))
+            .padding(start = 8.dp, top = 8.dp, end = 16.dp, bottom = 16.dp)
+            .clip(PANE_SHAPE)
+            // At night the terminal's black and the page are close: a faint edge keeps the sheet a sheet.
+            .then(if (Colors.isDark) Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), PANE_SHAPE) else Modifier),
+    ) { content() }
+}
+
+private val PANE_SHAPE = RoundedCornerShape(28.dp)
 
 /**
  * The pane side of a window that has room for two, with nothing open in it yet: the list on the

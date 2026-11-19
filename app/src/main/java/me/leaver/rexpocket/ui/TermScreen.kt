@@ -62,6 +62,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
@@ -448,7 +449,9 @@ internal fun TermScreen(
         // keyboard can lift this stack without the terminal ever changing shape.
         Box(Modifier.align(Alignment.BottomCenter).imePadding()) {
             Column(Modifier.onSizeChanged { bottomPx = it.height }) {
-                ReachableWidth {
+                // The strip belongs to the pane, end to end: its tab chip lines up with the text and
+                // its splits sit at the pane's edge, however wide the window.
+                Box(Modifier.fillMaxWidth()) {
                     PaneStrip(
                         state = state,
                         view = view,
@@ -645,7 +648,10 @@ private fun TermTopBar(
         }
         Box(Modifier.weight(1f)) {
             Column(
-                Modifier.fillMaxWidth().pressable(RoundedCornerShape(16.dp), enabled = view != null, onClick = { tabs = true })
+                // Out of the focus order: with no back button beside it, it would be the first thing
+                // a desk keyboard focuses and wear the focus ring. The tab chip opens the same menu.
+                Modifier.fillMaxWidth().focusProperties { canFocus = false }
+                    .pressable(RoundedCornerShape(16.dp), enabled = view != null, onClick = { tabs = true })
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
                 AnimatedContent(title, transitionSpec = { captionSwap() }, label = "tab-title") { text ->

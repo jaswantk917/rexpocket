@@ -8,6 +8,7 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.ui.graphics.blur.BlurStop
 import androidx.compose.ui.graphics.blur.BlurRadiusSpec
 import androidx.compose.ui.draw.blur
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MediumExtendedFloatingActionButton
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilterChip
@@ -321,6 +322,24 @@ internal fun HomeScreen(
                         },
                         subtitle = { Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         actions = {
+                            if (detail) {
+                                // Beside the terminal the list is a column, too narrow for a button
+                                // floating over its cards: the same action sits in the bar.
+                                val addLabel = stringResource(R.string.session_new_on, (connected ?: hosts.first()).label)
+                                Tip(addLabel) {
+                                    FilledTonalIconButton(
+                                        onClick = { onNewSession(connected ?: hosts.first()) },
+                                        shapes = IconButtonDefaults.shapes(),
+                                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        ),
+                                        modifier = Modifier.semantics { contentDescription = addLabel },
+                                    ) {
+                                        Glyph(R.drawable.ic_add, LocalContentColor.current)
+                                    }
+                                }
+                            }
                             Tip(stringResource(R.string.action_search)) {
                                 IconButton(onClick = { searchOpen = true }, shapes = IconButtonDefaults.shapes()) {
                                     Glyph(R.drawable.ic_search, LocalContentColor.current)
@@ -380,7 +399,7 @@ internal fun HomeScreen(
                         end = PAGE,
                         top = padding.calculateTopPadding() + 4.dp,
                         // Clear of the toolbar, so the last tab can be scrolled above it.
-                        bottom = if (searchOpen) 16.dp else navBottom + 112.dp,
+                        bottom = if (searchOpen) 16.dp else navBottom + if (detail) 24.dp else 112.dp,
                     ),
                 ) {
                     if (!searchOpen && hosts.isNotEmpty()) {
@@ -548,7 +567,7 @@ internal fun HomeScreen(
                         }
                     }
                 }
-                if (!searchOpen) {
+                if (!searchOpen && !detail) {
                     // The one thing this screen starts: a session. It folds to its icon while the list
                     // is read downwards and opens again on the way back up.
                     val addLabel = stringResource(R.string.session_new_on, (connected ?: hosts.first()).label)
