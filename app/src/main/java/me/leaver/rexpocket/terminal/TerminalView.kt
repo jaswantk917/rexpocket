@@ -128,6 +128,11 @@ internal class TerminalView(context: Context) : View(context) {
     private val scroller = OverScroller(context)
     private var flingLast = 0
     private var scrollRemainder = 0f
+    /**
+     * How far, in pixels, the history is drawn past the viewport's top row: scrolling back moves by
+     * the pixel, not the row. 0 at the bottom, where there is no row below to show.
+     */
+    private var phase = 0f
     private var axis = Axis.None
     private var downX = 0f
     private var downY = 0f
@@ -260,7 +265,7 @@ internal class TerminalView(context: Context) : View(context) {
     private fun cellAt(x: Float, y: Float): Pair<Int, Int> {
         val frame = currentFrame()
         val column = floor(x / cellWidth).toInt().coerceIn(0, (frame?.columns ?: 1) - 1)
-        val row = floor(y / cellHeight).toInt().coerceIn(0, (frame?.rows ?: 1) - 1)
+        val row = floor((y + if (selection == null) phase else 0f) / cellHeight).toInt().coerceIn(0, (frame?.rows ?: 1) - 1)
         return column to row
     }
 
@@ -274,12 +279,18 @@ internal class TerminalView(context: Context) : View(context) {
         val rows = min(frame.rows, ceil(height / cellHeight).toInt())
         val images = if (frame.images.isEmpty()) emptyList() else frame.images.sortedWith(compareBy({ it.layer }, { it.z }))
         keepBitmaps(images)
+        if (frame.atBottom) phase = 0f
+        val shift = if (selection == null) phase else 0f
+        canvas.save()
+        canvas.translate(0f, -shift)
         drawImages(canvas, frame, images, TerminalImage.LAYER_BELOW_BACKGROUND)
         for (row in 0 until rows) drawBackgrounds(canvas, frame, row, columns)
         drawImages(canvas, frame, images, TerminalImage.LAYER_BELOW_TEXT)
         for (row in 0 until rows) drawText(canvas, frame, row, columns)
         drawImages(canvas, frame, images, TerminalImage.LAYER_ABOVE_TEXT)
+        if (shift > 0f) drawRowBelow(canvas, frame.rows, columns)
         if (selection == null) drawCursor(canvas, frame)
+        canvas.restore()
         drawHandles(canvas)
         drawScrollbar(canvas, frame)
     }
@@ -528,9 +539,42 @@ internal class TerminalView(context: Context) : View(context) {
         postInvalidateOnAnimation()
     }
 
+    /** The row a smooth scroll uncovers under the last one: the newest row of the viewport one row down. */
+    private fun drawRowBelow(canvas: Canvas, rows: Int, columns: Int) {
+        val below = session?.frameBelow() ?: return
+        val last = below.rows - 1
+        canvas.save()
+        canvas.translate(0f, (rows - last) * cellHeight)
+        drawBackgrounds(canvas, below, last, min(columns, below.columns))
+        drawText(canvas, below, last, min(columns, below.columns))
+        canvas.restore()
+    }
+
     // ---- Scrolling -------------------------------------------------------------------------
 
+    /**
+     * The history follows the finger pixel for pixel: whole rows go to libghostty's viewport and
+     * what is left over is drawn as [phase]. At either end it rests flush, and a fling stops there.
+     */
+    private fun scrollHistory(pixels: Float, frame: TerminalFrame) {
+        val active = session ?: return
+        val towardsNewer = frame.scrollTotal - frame.scrollVisible - frame.scrollOffset
+        val towardsOlder = frame.scrollOffset
+        val step = stepHistory(phase, pixels, cellHeight, towardsNewer, towardsOlder)
+        if (step.stopped) scroller.forceFinished(true)
+        phase = step.phase
+        lastScrollAt = SystemClock.uptimeMillis()
+        if (step.lines != 0) active.scroll(step.lines) else invalidate()
+    }
+
     private fun scrollByPixels(pixels: Float, x: Float, y: Float) {
+        val frame = currentFrame() ?: return
+        // A program that reads the mouse or owns the screen gets whole wheel steps; the history moves
+        // by the pixel.
+        if (!frame.mouseTracking && !frame.alternateScreen) {
+            scrollHistory(pixels, frame)
+            return
+        }
         scrollRemainder += pixels
         val lines = (scrollRemainder / cellHeight).toInt()
         if (lines == 0) return
@@ -624,6 +668,8 @@ internal class TerminalView(context: Context) : View(context) {
             onLink?.invoke(url)
             return
         }
+        // Selection works on whole rows: the history settles on the row under the finger first.
+        phase = 0f
         selection = TerminalSelection(frame, column, row).also { it.word() }
         // The finger that held the press carries on, and it moves the end of the word it selected.
         selectionDrag = true
@@ -800,4 +846,40 @@ internal class TerminalView(context: Context) : View(context) {
         const val COMBINING_ACCENT = Int.MIN_VALUE
         const val DELETE = 0x7f
     }
+}
+
+/** A move through the history: whole rows for libghostty, the pixels left over, and whether an end stopped it. */
+internal data class HistoryStep(val lines: Int, val phase: Float, val stopped: Boolean)
+
+/**
+ * Moves [phase] (pixels past the viewport's top row) by [pixels], positive towards the newer output.
+ * Whole rows become [HistoryStep.lines], up to the rows there are each way; at either end the
+ * leftover is dropped so the history rests flush, and at the bottom there is never a leftover.
+ */
+internal fun stepHistory(phase: Float, pixels: Float, cellHeight: Float, towardsNewer: Int, towardsOlder: Int): HistoryStep {
+    var p = phase + pixels
+    var lines = 0
+    var stopped = false
+    while (p >= cellHeight) {
+        if (lines < towardsNewer) {
+            p -= cellHeight
+            lines++
+        } else {
+            p = 0f
+            stopped = true
+            break
+        }
+    }
+    while (p < 0f) {
+        if (-lines < towardsOlder) {
+            p += cellHeight
+            lines--
+        } else {
+            p = 0f
+            stopped = true
+            break
+        }
+    }
+    if (lines == towardsNewer) p = 0f
+    return HistoryStep(lines, p, stopped)
 }

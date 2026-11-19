@@ -49,6 +49,8 @@ internal class TerminalSession private constructor(private var handle: Long) {
     private var version = 0
     private var cached: TerminalFrame? = null
     private var cachedVersion = -1
+    private var below: TerminalFrame? = null
+    private var belowVersion = -1
 
     private val main = Handler(Looper.getMainLooper())
     private var pendingResize: Runnable? = null
@@ -60,6 +62,23 @@ internal class TerminalSession private constructor(private var handle: Long) {
         val result = withHandle { GhosttyVt.nativeWrite(it, bytes, 0, bytes.size).also { version++ } }
         // A refused write leaves the emulator where it was, and there is no better picture to show.
         if (result != null) onChanged?.invoke()
+    }
+
+    /**
+     * The viewport one row towards the newer output, for the row a smooth scroll uncovers under the
+     * last one. Only asked for while the viewport is not at the bottom, so the step down and back up
+     * always lands where it started; it leaves the version alone, as nothing on screen changed.
+     */
+    fun frameBelow(): TerminalFrame? = synchronized(lock) {
+        if (handle == 0L) return null
+        if (belowVersion != version || below == null) {
+            GhosttyVt.nativeScroll(handle, 1)
+            val words = GhosttyVt.nativeFrame(handle)
+            GhosttyVt.nativeScroll(handle, -1)
+            below = words?.let(TerminalFrame::parse)
+            belowVersion = version
+        }
+        below
     }
 
     /** The viewport right now; the one before it if nothing has changed since. Null once closed. */
