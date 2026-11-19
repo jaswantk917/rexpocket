@@ -1,5 +1,12 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.ui.layout.layout
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.Immutable
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ToggleButton
@@ -293,7 +300,13 @@ internal fun HomeScreen(
                     SearchBar(query = query, focus = focus, onQuery = { query = it }, onClose = closeSearch)
                 } else {
                     LargeFlexibleTopAppBar(
-                        title = { Text(stringResource(R.string.home_title), fontWeight = FontWeight.Bold) },
+                        title = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RexLogo(collapsed = { bar.state.collapsedFraction })
+                                Spacer(Modifier.width(12.dp))
+                                Text(stringResource(R.string.home_title))
+                            }
+                        },
                         subtitle = { Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Colors.bg,
@@ -317,20 +330,20 @@ internal fun HomeScreen(
                         bottom = if (searchOpen) 16.dp else navBottom + 112.dp,
                     ),
                 ) {
-                    var shown = 0
                     rows.forEachIndexed { index, (host, sessions) ->
                         val live = connected?.id == host.id
                         val hostExpanded = host.id !in collapsedHosts || searchOpen
-                        val hostOrder = shown++
                         item(key = "host-${host.id}") {
-                            Column(Modifier.animateItem().reveal(hostOrder)) {
+                            Column(Modifier.animateItem()) {
                                 if (index > 0) Spacer(Modifier.height(20.dp))
-                                HostHeader(
+                                HostCard(
                                     host = host,
                                     live = live,
                                     status = if (live) phaseText(state) else null,
                                     phase = if (live) state.phase else null,
                                     sessionCount = sessions.size,
+                                    working = sessions.sumOf { r -> r.tabs.count { it.activity?.state == "working" } },
+                                    waiting = sessions.sumOf { r -> r.tabs.count { it.activity?.state == "blocked" } },
                                     expanded = hostExpanded,
                                     onToggle = {
                                         if (live) {
@@ -343,9 +356,46 @@ internal fun HomeScreen(
                                     onNewSession = { onNewSession(host) },
                                     onEdit = { editing = host },
                                     onDisconnect = onDisconnect,
-                                )
-                                if (live) HostStatus(state, tailnetPath, onRetry, onProbePath)
-                                Spacer(Modifier.height(8.dp))
+                                ) { HostStatus(state, tailnetPath, onRetry, onProbePath) }
+                                Spacer(Modifier.height(16.dp))
+                            }
+                        }
+                        // What needs a look, before everything else: every tab working or waiting,
+                        // across the sessions, one tap from its terminal.
+                        val attention = if (live && hostExpanded) {
+                            sessions.flatMap { r -> r.tabs.filter { it.activity != null }.map { r to it } }
+                                .sortedBy { (_, t) -> if (t.activity?.state == "blocked") 0 else 1 }
+                        } else {
+                            emptyList()
+                        }
+                        if (attention.isNotEmpty()) {
+                            item(key = "attention-${host.id}") {
+                                Column(Modifier.animateItem().padding(bottom = 20.dp)) {
+                                    SectionTitle(stringResource(R.string.home_attention))
+                                    LazyRow(
+                                        // Edge to edge: the row scrolls under the page margins.
+                                        modifier = Modifier.layout { measurable, constraints ->
+                                            val bleed = PAGE.roundToPx() * 2
+                                            val placeable = measurable.measure(constraints.copy(maxWidth = constraints.maxWidth + bleed))
+                                            layout(constraints.maxWidth, placeable.height) { placeable.place(-bleed / 2, 0) }
+                                        },
+                                        contentPadding = PaddingValues(horizontal = PAGE),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    ) {
+                                        items(attention, key = { (r, t) -> r.session.id + "/" + t.id }) { (r, t) ->
+                                            AttentionCard(r.session.label, r.session.id, t, Modifier.animateItem()) {
+                                                onOpenTab(host, r.session.id, t.id)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (live && hostExpanded && sessions.isNotEmpty()) {
+                            item(key = "sessions-title-${host.id}") {
+                                SectionTitle(stringResource(R.string.header_sessions), Modifier.animateItem()) {
+                                    RoundButton(R.drawable.ic_add, stringResource(R.string.session_new), { onNewSession(host) }, plate = MaterialTheme.colorScheme.surfaceContainerHigh, size = 44.dp)
+                                }
                             }
                         }
                         if (hostExpanded) {
@@ -353,9 +403,8 @@ internal fun HomeScreen(
                                 val sessionExpanded = row.session.id !in collapsedSessions || searchOpen
                                 val openingThis = opening == Opening.Existing(row.session.id)
                                 val showTabs = sessionExpanded && row.view != null
-                                val order = shown++
                                 item(key = "session-${row.session.id}") {
-                                    Column(Modifier.animateItem().reveal(order)) {
+                                    Column(Modifier.animateItem()) {
                                         SessionHeader(
                                             row = row,
                                             live = live,
@@ -374,6 +423,7 @@ internal fun HomeScreen(
                                         if (sessionExpanded && row.view == null) {
                                             Spacer(Modifier.height(SEGMENT_GAP))
                                             EmptyTabs(
+                                                tint = rememberTint(row.session.id),
                                                 text = when {
                                                     openingThis -> stringResource(R.string.session_opening)
                                                     !live -> stringResource(R.string.session_cached)
@@ -391,10 +441,12 @@ internal fun HomeScreen(
                                     val onScreen = if (detail && live && state.activeSessionId == row.session.id) state.view?.activeWindowId else null
                                     row.tabs.forEachIndexed { index, tab ->
                                         item(key = "tab-${row.session.id}-${tab.id}") {
-                                            Column(Modifier.animateItem().reveal(order)) {
+                                            Column(Modifier.animateItem()) {
                                                 Spacer(Modifier.height(SEGMENT_GAP))
                                                 TabRow(
                                                     tab = tab,
+                                                    number = index + 1,
+                                                    tint = rememberTint(row.session.id),
                                                     opening = openingThis,
                                                     open = tab.id == onScreen,
                                                     shape = segmentShape(index + 1, row.tabs.size + 1),
@@ -546,97 +598,205 @@ internal fun Settings(
 
 /** The fold's chevron: down while open, turned to point right while folded. */
 @Composable
-private fun FoldChevron(expanded: Boolean) {
+private fun FoldChevron(expanded: Boolean, color: Color = Colors.muted) {
     val turn by animateFloatAsState(if (expanded) 0f else -90f, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "fold")
     Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-        Glyph(R.drawable.ic_expand, Colors.muted, Modifier.rotate(turn))
+        Glyph(R.drawable.ic_expand, color, Modifier.rotate(turn))
     }
 }
 
 /**
- * A host's mark: the computer on an expressive cookie, filled with the scheme's primary container
- * while it is the one connected, and its connection's colour cut into the corner.
+ * A host's mark: the computer on a cookie that turns into a sunburst once it is the one connected,
+ * its connection's colour cut into the corner.
  */
 @Composable
-private fun HostMark(live: Boolean, phase: Phase?) {
-    val scheme = MaterialTheme.colorScheme
-    val fill by animateColorAsState(if (live) scheme.primaryContainer else scheme.surfaceContainerHighest, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "mark")
-    val ink = if (live) scheme.onPrimaryContainer else scheme.onSurfaceVariant
-    val turn by animateFloatAsState(if (live) 0f else -30f, MaterialTheme.motionScheme.slowSpatialSpec(), label = "mark-turn")
-    Box(Modifier.size(52.dp)) {
-        Box(
-            Modifier.size(52.dp).graphicsLayer { rotationZ = turn }.clip(MaterialShapes.Cookie9Sided.toShape()).background(fill),
-            contentAlignment = Alignment.Center,
-        ) {
-            Glyph(R.drawable.ic_host, ink, Modifier.graphicsLayer { rotationZ = -turn }, size = 24.dp)
+private fun HostMark(live: Boolean, phase: Phase?, fill: Color, ink: Color) {
+    Box(Modifier.size(56.dp)) {
+        MorphBackdrop(active = live, color = fill, size = 56.dp) {
+            Glyph(R.drawable.ic_host, ink, size = 26.dp)
         }
         if (phase != null) Dot(phaseTint(phase), 14.dp, Modifier.align(Alignment.BottomEnd), ring = Colors.bg)
     }
 }
 
 /**
- * One host: its mark, its name, and what it is doing. Tapping it folds its sessions, or connects it
- * when it is not the one open. Its menu is anchored to it, the way Android menus are.
+ * One host. The connected one is a hero: a card in the host's own hue with a big shape turning
+ * slowly in its corner, its name large, what it is doing, and a row of counts - sessions, working,
+ * waiting - the way an app page leads with its numbers. A host that is not connected is a quiet
+ * row that offers to connect. The menu is anchored to the card.
  */
 @Composable
-private fun HostHeader(
+private fun HostCard(
     host: SavedHost,
     live: Boolean,
     status: String?,
     phase: Phase?,
     sessionCount: Int,
+    working: Int,
+    waiting: Int,
     expanded: Boolean,
     onToggle: () -> Unit,
     onConnect: () -> Unit,
     onNewSession: () -> Unit,
     onEdit: () -> Unit,
     onDisconnect: () -> Unit,
+    footer: @Composable () -> Unit,
 ) {
     val folded = stringResource(R.string.state_folded)
+    val tint = rememberTint("host-" + host.id)
     var menu by remember { mutableStateOf(false) }
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 72.dp)
-            .pressable(RoundedCornerShape(28.dp), onLongClick = { menu = true }, onClick = onToggle)
-            .semantics { if (live && !expanded) stateDescription = folded }
-            .padding(start = 4.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val shape = RoundedCornerShape(32.dp)
+    val fill by animateColorAsState(if (live) tint.container else Colors.surface, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "host-card")
+    val ink = if (live) tint.onContainer else MaterialTheme.colorScheme.onSurface
+    Box(
+        Modifier.fillMaxWidth().clip(shape).background(fill)
+            .pressable(shape, onLongClick = { menu = true }, onClick = onToggle)
+            .semantics { if (live && !expanded) stateDescription = folded },
     ) {
-        HostMark(live, phase)
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                host.label,
-                style = MaterialTheme.typography.titleLargeEmphasized,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val line = (if (live) status.orEmpty() else stringResource(R.string.host_not_connected)) +
-                if (sessionCount > 0) " · " + pluralStringResource(R.plurals.session_count, sessionCount, sessionCount) else ""
-            AnimatedContent(line, transitionSpec = { captionSwap() }, label = "host-status") { text ->
-                Text(
-                    text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (live) phaseTint(phase ?: Phase.Idle) else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+        // Behind the content, at the card's size: the shapes never make the card taller.
+        if (live) {
+            Box(Modifier.matchParentSize()) {
+                Ornament(MaterialShapes.Cookie12Sided, tint.ornament, 220.dp, Modifier.align(Alignment.TopEnd).offset(x = 70.dp, y = (-60).dp))
+                Ornament(MaterialShapes.Clover4Leaf, tint.ornament, 96.dp, Modifier.align(Alignment.BottomStart).offset(x = (-30).dp, y = 34.dp), periodMs = 32_000)
             }
         }
-        if (live) FoldChevron(expanded)
-        Box {
-            RoundButton(R.drawable.ic_more, stringResource(R.string.action_more), { menu = true }, tint = Colors.muted, size = 48.dp)
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = RoundedCornerShape(20.dp)) {
-                if (!live) MenuItem(stringResource(R.string.action_connect), R.drawable.ic_tailnet) { menu = false; onConnect() }
-                MenuItem(stringResource(R.string.session_new), R.drawable.ic_add) { menu = false; onNewSession() }
-                MenuItem(stringResource(R.string.action_edit_host), R.drawable.ic_edit) { menu = false; onEdit() }
-                if (live) {
-                    HorizontalDivider()
-                    MenuItem(stringResource(R.string.action_disconnect), R.drawable.ic_disconnect, danger = true) { menu = false; onDisconnect() }
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = if (live) 20.dp else 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HostMark(live, phase, if (live) tint.accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainerHighest, if (live) tint.onContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        host.label,
+                        style = if (live) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge,
+                        color = ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val line = if (live) status.orEmpty() else stringResource(R.string.host_not_connected)
+                    AnimatedContent(line, transitionSpec = { captionSwap() }, label = "host-status") { text ->
+                        Text(
+                            text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (live) phaseTint(phase ?: Phase.Idle) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
+                if (!live) {
+                    FilledTonalButton(onClick = onConnect, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.action_connect)) }
+                } else {
+                    FoldChevron(expanded, ink)
+                }
+                Box {
+                    RoundButton(R.drawable.ic_more, stringResource(R.string.action_more), { menu = true }, tint = ink.copy(alpha = 0.7f), size = 44.dp)
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = RoundedCornerShape(20.dp)) {
+                        if (!live) MenuItem(stringResource(R.string.action_connect), R.drawable.ic_tailnet) { menu = false; onConnect() }
+                        MenuItem(stringResource(R.string.session_new), R.drawable.ic_add) { menu = false; onNewSession() }
+                        MenuItem(stringResource(R.string.action_edit_host), R.drawable.ic_edit) { menu = false; onEdit() }
+                        if (live) {
+                            HorizontalDivider()
+                            MenuItem(stringResource(R.string.action_disconnect), R.drawable.ic_disconnect, danger = true) { menu = false; onDisconnect() }
+                        }
+                    }
+                }
+            }
+            if (live) {
+                Spacer(Modifier.height(18.dp))
+                Row(Modifier.fillMaxWidth().padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Stat(sessionCount, pluralStringResource(R.plurals.stat_sessions, sessionCount), ink, Modifier.weight(1f))
+                    StatDivider(ink)
+                    Stat(working, stringResource(R.string.stat_working), ink, Modifier.weight(1f))
+                    StatDivider(ink)
+                    Stat(waiting, stringResource(R.string.stat_waiting), if (waiting > 0) Colors.amber else ink, Modifier.weight(1f))
+                }
+                footer()
             }
         }
     }
+}
+
+/**
+ * Rex's mark in the app bar: a cookie in the primary container that turns slowly, and that the
+ * scroll turns further and shrinks as the large title folds away - the bar moves with the list.
+ */
+@Composable
+private fun RexLogo(collapsed: () -> Float) {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        Modifier.size(40.dp).graphicsLayer {
+            val k = collapsed()
+            val scale = 1f - 0.3f * k
+            scaleX = scale
+            scaleY = scale
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Ornament(MaterialShapes.Cookie9Sided, scheme.primaryContainer, 40.dp, periodMs = 18_000)
+        Box(Modifier.graphicsLayer { rotationZ = collapsed() * 180f }) {
+            Glyph(R.drawable.ic_terminal, scheme.onPrimaryContainer, size = 22.dp)
+        }
+    }
+}
+
+/** A section of the list, titled as Orion titles its shelves: large and light, an action at the end. */
+@Composable
+private fun SectionTitle(text: String, modifier: Modifier = Modifier, action: @Composable () -> Unit = {}) {
+    Row(modifier.fillMaxWidth().padding(start = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+        action()
+    }
+}
+
+/**
+ * A tab that needs a look, as a card on the shelf: its session's hue, what runs in it big on a
+ * shape that keeps turning while it works, its name, its session, and what it is doing.
+ */
+@Composable
+private fun AttentionCard(session: String, sessionId: String, tab: TabItem, modifier: Modifier = Modifier, onOpen: () -> Unit) {
+    val tint = rememberTint(sessionId)
+    val waiting = tab.activity?.state == "blocked"
+    val shape = RoundedCornerShape(28.dp)
+    Column(
+        modifier.width(168.dp).clip(shape).background(tint.container).pressable(shape, onClick = onOpen).padding(16.dp),
+    ) {
+        Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
+            Ornament(if (waiting) MaterialShapes.Cookie12Sided else MaterialShapes.Sunny, tint.accent.copy(alpha = 0.18f), 64.dp, periodMs = if (waiting) 60_000 else 9_000)
+            ProgramTile(tab.program, size = 36.dp)
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(tab.title, style = MaterialTheme.typography.titleMedium, color = tint.onContainer, maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
+        Text(session, style = MaterialTheme.typography.bodySmall, color = tint.onContainer.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(12.dp))
+        if (waiting) {
+            StatusPill(tab.activity?.let { statusWord(it) }.orEmpty(), Colors.amber)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LoadingIndicator(Modifier.size(28.dp), color = tint.accent)
+                Spacer(Modifier.width(6.dp))
+                Text(tab.activity?.let { statusWord(it) }.orEmpty(), style = MaterialTheme.typography.labelLarge, color = tint.accent, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** One count in a hero's row: the number large, what it counts under it. The number rolls when it changes. */
+@Composable
+private fun Stat(value: Int, label: String, color: Color, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        AnimatedContent(value, transitionSpec = {
+            val up = targetState > initialState
+            (slideInVertically { if (up) it else -it } + fadeIn()) togetherWith (slideOutVertically { if (up) -it else it } + fadeOut())
+        }, label = "stat") { n ->
+            Text(n.toString(), style = MaterialTheme.typography.headlineSmall, color = color)
+        }
+        Text(label, style = MaterialTheme.typography.labelMedium, color = color.copy(alpha = 0.72f), maxLines = 1)
+    }
+}
+
+@Composable
+private fun StatDivider(color: Color) {
+    Box(Modifier.width(1.dp).height(28.dp).background(color.copy(alpha = 0.18f)))
 }
 
 /** A row of an anchored menu: its icon, its label, red when it takes something away. */
@@ -658,7 +818,7 @@ internal fun <S> AnimatedContentTransitionScope<S>.captionSwap(): ContentTransfo
 @Composable
 private fun HostStatus(state: PocketState, path: TailnetPath?, onRetry: () -> Unit, onProbe: () -> Unit) {
     val problem = rememberSettledProblem(state.phase, state.problem.takeIf { state.phase != Phase.Live })
-    Column(Modifier.padding(start = 72.dp)) {
+    Column(Modifier.padding(top = 12.dp)) {
         if (problem != null) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
@@ -708,8 +868,9 @@ private fun segmentShape(index: Int, count: Int): RoundedCornerShape {
 }
 
 /**
- * A session: the head of its segmented group - its name, what it holds, the plus that opens a tab
- * in it, and the fold. [joined] when its tabs follow it in the same group.
+ * A session: the head of its card, in the session's own hue - the hue its terminal wears too. Its
+ * name, what it holds, the plus that opens a tab in it, and the fold, with a shape turning in its
+ * corner. [joined] when its tabs follow it in the same card.
  */
 @Composable
 private fun SessionHeader(
@@ -721,6 +882,7 @@ private fun SessionHeader(
     onToggle: () -> Unit,
     onNewTab: () -> Unit,
 ) {
+    val tint = rememberTint(row.session.id)
     val tabs = row.view?.windows?.size ?: 0
     val detail = when {
         opening -> stringResource(R.string.session_opening)
@@ -729,57 +891,51 @@ private fun SessionHeader(
         else -> null
     }
     val shape = if (joined) segmentShape(0, 2) else RoundedCornerShape(SEGMENT_OUTER)
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 60.dp)
-            .pressable(shape, onClick = onToggle)
-            .background(Colors.surface)
-            .padding(start = 20.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    row.session.label,
-                    style = MaterialTheme.typography.titleMediumEmphasized,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (row.activity) {
-                    Spacer(Modifier.width(8.dp))
-                    Dot(MaterialTheme.colorScheme.primary, 8.dp)
+    Box(Modifier.fillMaxWidth().clip(shape).background(tint.container).pressable(shape, onClick = onToggle)) {
+        Box(Modifier.matchParentSize()) {
+            Ornament(MaterialShapes.Sunny, tint.ornament, 120.dp, Modifier.align(Alignment.CenterEnd).offset(x = 36.dp), periodMs = 40_000)
+        }
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(start = 20.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f).padding(vertical = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        row.session.label,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = tint.onContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (row.activity) {
+                        Spacer(Modifier.width(8.dp))
+                        Dot(tint.accent, 8.dp)
+                    }
+                }
+                if (detail != null) {
+                    Text(detail, style = MaterialTheme.typography.bodySmall, color = tint.onContainer.copy(alpha = 0.72f), maxLines = 1)
                 }
             }
-            if (detail != null) {
-                Text(
-                    detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (opening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
+            if (opening) LoadingIndicator(Modifier.size(32.dp), color = tint.accent)
+            RoundButton(R.drawable.ic_add, stringResource(R.string.menu_new_tab), onNewTab, tint = tint.onContainer, size = 44.dp, enabled = !opening)
+            if (row.view != null) FoldChevron(expanded, tint.onContainer)
         }
-        if (opening) LoadingIndicator(Modifier.size(32.dp))
-        RoundButton(
-            R.drawable.ic_add,
-            stringResource(R.string.menu_new_tab),
-            onNewTab,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            size = 40.dp,
-            enabled = !opening,
-        )
-        if (row.view != null) FoldChevron(expanded)
     }
 }
 
 /**
- * One tab: the mark of what runs in it, its name and panes, and what it is doing at the end - a
- * living loader while an agent works, an amber "needs you" while one waits.
+ * One tab, numbered as Harmonic numbers its stories: its number, the mark of what runs in it, its
+ * name and panes, and what it is doing at the end - a living loader while an agent works, an amber
+ * "needs you" while one waits. Its row is the session's hue, quieter; the tab beside the list wears
+ * the full hue with an edge in the accent.
  */
 @Composable
 private fun TabRow(
     tab: TabItem,
+    number: Int,
+    tint: Tint,
     opening: Boolean,
     /** True for the tab the pane beside the list is showing. */
     open: Boolean,
@@ -787,42 +943,51 @@ private fun TabRow(
     onOpen: () -> Unit,
 ) {
     val selected = stringResource(R.string.state_selected)
-    val scheme = MaterialTheme.colorScheme
-    val fill by animateColorAsState(if (open) scheme.secondaryContainer else Colors.surface, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "tab")
+    val fill by animateColorAsState(if (open) tint.container else tint.surface, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "tab")
+    val edge by animateDpAsState(if (open) 4.dp else 0.dp, MaterialTheme.motionScheme.fastSpatialSpec(), label = "tab-edge")
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 68.dp)
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min).heightIn(min = 64.dp)
+            .clip(shape).background(fill)
             .pressable(shape, enabled = !opening, onClick = onOpen)
-            .background(fill)
-            .semantics { if (open) stateDescription = selected }
-            .padding(start = 16.dp, end = 16.dp),
+            .semantics { if (open) stateDescription = selected },
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(Modifier.width(edge).fillMaxHeight().background(tint.accent))
+        Text(
+            number.toString(),
+            style = MaterialTheme.typography.titleMedium,
+            color = tint.onContainer.copy(alpha = 0.55f),
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(36.dp),
+        )
+        Spacer(Modifier.width(12.dp))
         ProgramTile(tab.program, size = TILE)
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
             Text(
                 tab.title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
-                color = if (open) scheme.onSecondaryContainer else scheme.onSurface,
+                color = tint.onContainer,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 pluralStringResource(R.plurals.pane_count, tab.panes, tab.panes),
                 style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
+                color = tint.onContainer.copy(alpha = 0.65f),
                 maxLines = 1,
             )
         }
         val activity = tab.activity
         AnimatedContent(activity?.state, transitionSpec = { (scaleIn(initialScale = 0.6f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.6f) + fadeOut()) }, label = "tab-activity") { state ->
             when (state) {
-                "working" -> LoadingIndicator(Modifier.size(36.dp))
+                "working" -> LoadingIndicator(Modifier.size(36.dp), color = tint.accent)
                 "blocked" -> activity?.let { StatusPill(statusWord(it).orEmpty(), Colors.amber) }
                 else -> Spacer(Modifier.size(1.dp))
             }
         }
+        Spacer(Modifier.width(14.dp))
     }
 }
 
@@ -839,15 +1004,15 @@ private fun StatusPill(text: String, color: Color) {
 }
 
 @Composable
-private fun EmptyTabs(text: String, canOpen: Boolean, onOpen: () -> Unit) {
+private fun EmptyTabs(text: String, tint: Tint, canOpen: Boolean, onOpen: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(segmentShape(1, 2)).background(Colors.surface)
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(segmentShape(1, 2)).background(tint.surface)
             .padding(start = 20.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = tint.onContainer.copy(alpha = 0.72f), modifier = Modifier.weight(1f))
         if (canOpen) {
-            TextButton(onClick = onOpen, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.session_tap_open)) }
+            TextButton(onClick = onOpen, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.session_tap_open), color = tint.accent) }
         }
     }
 }
@@ -953,7 +1118,7 @@ private fun EmptyHome(onAdd: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Box(
-            Modifier.size(132.dp).reveal(0).clip(MaterialShapes.Cookie9Sided.toShape()).background(scheme.primaryContainer),
+            Modifier.size(132.dp).clip(MaterialShapes.Cookie9Sided.toShape()).background(scheme.primaryContainer),
             contentAlignment = Alignment.Center,
         ) {
             Glyph(R.drawable.ic_host, scheme.onPrimaryContainer, size = 56.dp)
@@ -964,8 +1129,7 @@ private fun EmptyHome(onAdd: () -> Unit) {
             style = MaterialTheme.typography.headlineMediumEmphasized,
             color = scheme.onSurface,
             textAlign = TextAlign.Center,
-            modifier = Modifier.reveal(1),
-        )
+                    )
         Spacer(Modifier.height(12.dp))
         Text(
             stringResource(R.string.home_no_hosts_body),
@@ -973,13 +1137,13 @@ private fun EmptyHome(onAdd: () -> Unit) {
             color = scheme.onSurfaceVariant,
             fontFamily = FontFamily.Monospace,
             textAlign = TextAlign.Center,
-            modifier = Modifier.reveal(2).clip(RoundedCornerShape(16.dp)).background(scheme.surfaceContainerHigh).padding(16.dp),
+            modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(scheme.surfaceContainerHigh).padding(16.dp),
         )
         Spacer(Modifier.height(32.dp))
         Button(
             onClick = onAdd,
             shapes = ButtonDefaults.shapes(),
-            modifier = Modifier.reveal(3).heightIn(min = ButtonDefaults.MediumContainerHeight),
+            modifier = Modifier.heightIn(min = ButtonDefaults.MediumContainerHeight),
             contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.MediumContainerHeight),
         ) {
             Glyph(R.drawable.ic_add, scheme.onPrimary, size = ButtonDefaults.iconSizeFor(ButtonDefaults.MediumContainerHeight))

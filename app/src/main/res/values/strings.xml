@@ -272,7 +272,7 @@
     <string name="appearance_scheme_slate">Slate</string>
     <string name="appearance_pure_black">Pure black</string>
     <string name="appearance_pure_black_detail">Black surfaces when the phone is dark</string>
-    <string name="appearance_app_font">Google Sans Flex</string>
+    <string name="appearance_app_font">Space Grotesk</string>
     <string name="appearance_app_font_detail">The app\'s typeface; off uses the phone\'s</string>
     <string name="keybar_always_detail">Keep the key bar with a keyboard attached</string>
     <string name="alerts_detail">Tell me when an agent finishes or needs me</string>
@@ -281,4 +281,14 @@
     <string name="field_hide">Hide</string>
     <string name="holder_phone_tip">This phone holds the pane · tap to give it back</string>
     <string name="holder_desk_tip">The desktop holds the pane · tap to take over</string>
+    <plurals name="stat_sessions">
+        <item quantity="one">session</item>
+        <item quantity="other">sessions</item>
+    </plurals>
+    <string name="stat_working">working</string>
+    <string name="stat_waiting">need you</string>
+    <string name="settings_quick">Quick toggles</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+    <string name="home_attention">Needs a look</string>
 </resources>

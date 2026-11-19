@@ -1,5 +1,10 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
@@ -106,7 +111,7 @@ internal fun SettingsScreen(settings: SettingsModel, onBack: () -> Unit, showBac
         contentWindowInsets = WindowInsets(0),
         topBar = {
             LargeFlexibleTopAppBar(
-                title = { Text(stringResource(R.string.settings), fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.settings)) },
                 navigationIcon = {
                     RoundButton(
                         if (showBack) R.drawable.ic_back else R.drawable.ic_close,
@@ -128,66 +133,66 @@ internal fun SettingsScreen(settings: SettingsModel, onBack: () -> Unit, showBac
             state = rememberLazyListState(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 8.dp, bottom = navBottom + 32.dp),
         ) {
+            // The switches first, as tiles under the thumb: each is one tap, and the on ones fill.
+            item(key = "quick") {
+                Column(Modifier.padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(R.string.settings_quick),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = scheme.primary,
+                        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        QuickTile(R.drawable.ic_settings_dark, R.string.appearance_pure_black, settings.appearance.pureBlack, Modifier.weight(1f)) {
+                            Haptics.toggle(view, it)
+                            settings.onAppearance(settings.appearance.copy(pureBlack = it))
+                        }
+                        QuickTile(R.drawable.ic_text, R.string.appearance_app_font, settings.appearance.appFont, Modifier.weight(1f)) {
+                            Haptics.toggle(view, it)
+                            settings.onAppearance(settings.appearance.copy(appFont = it))
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        QuickTile(R.drawable.ic_keyboard, R.string.keybar_title, settings.keyBar, Modifier.weight(1f)) {
+                            Haptics.toggle(view, it)
+                            settings.onKeyBar(it)
+                        }
+                        // No tick here: turning alerts on may stop at a permission prompt; the tick
+                        // comes when the switch actually moves.
+                        QuickTile(R.drawable.ic_notifications, R.string.alerts_title, settings.alerts, Modifier.weight(1f)) { settings.onAlerts() }
+                    }
+                }
+            }
             item(key = "appearance") {
-                Group(R.string.settings_group_appearance, index = 0) {
+                Card(R.string.settings_group_appearance, 0, MaterialShapes.Flower) {
                     SchemePicker(settings.appearance) { settings.onAppearance(settings.appearance.copy(scheme = it)) }
-                    SwitchRow(
-                        R.drawable.ic_settings_dark,
-                        R.string.appearance_pure_black,
-                        R.string.appearance_pure_black_detail,
-                        settings.appearance.pureBlack,
-                        tone = Tone.Primary,
-                    ) {
-                        Haptics.toggle(view, it)
-                        settings.onAppearance(settings.appearance.copy(pureBlack = it))
-                    }
-                    SwitchRow(
-                        R.drawable.ic_text,
-                        R.string.appearance_app_font,
-                        R.string.appearance_app_font_detail,
-                        settings.appearance.appFont,
-                        tone = Tone.Primary,
-                    ) {
-                        Haptics.toggle(view, it)
-                        settings.onAppearance(settings.appearance.copy(appFont = it))
-                    }
                 }
             }
             item(key = "terminal") {
-                Group(R.string.settings_group_terminal, index = 1) {
-                    LinkRow(R.drawable.ic_text, stringResource(R.string.terminal_font_title), settings.terminalFont, Tone.Tertiary, settings.onTerminalFont)
-                    SwitchRow(R.drawable.ic_keyboard, R.string.keybar_title, R.string.keybar_always_detail, settings.keyBar, tone = Tone.Tertiary) {
-                        Haptics.toggle(view, it)
-                        settings.onKeyBar(it)
-                    }
+                Card(R.string.settings_group_terminal, 4, MaterialShapes.Cookie6Sided) {
+                    LinkRow(R.drawable.ic_text, stringResource(R.string.terminal_font_title), settings.terminalFont, settings.onTerminalFont)
                 }
             }
             item(key = "connection") {
-                Group(R.string.settings_group_connection, index = 2) {
-                    LinkRow(R.drawable.ic_tailnet, stringResource(R.string.tailscale_title), settings.tailnet, Tone.Secondary, settings.onTailscale)
-                    // No tick here: turning alerts on may stop at a permission prompt; the tick comes
-                    // when the switch actually moves.
-                    SwitchRow(R.drawable.ic_notifications, R.string.alerts_title, R.string.alerts_detail, settings.alerts, tone = Tone.Secondary) {
-                        settings.onAlerts()
-                    }
+                Card(R.string.settings_group_connection, 1, MaterialShapes.Clover8Leaf) {
+                    LinkRow(R.drawable.ic_tailnet, stringResource(R.string.tailscale_title), settings.tailnet, settings.onTailscale)
                 }
             }
             item(key = "version") {
-                Group(R.string.settings_group_version, index = 3) {
+                Card(R.string.settings_group_version, 3, MaterialShapes.SoftBurst) {
                     ChannelRow(settings.channel, settings.onChannel)
-                    LinkRow(R.drawable.ic_arrow_down, stringResource(R.string.update_title), updateDetail(settings.update).orEmpty(), Tone.Primary, settings.onUpdate)
+                    LinkRow(R.drawable.ic_arrow_down, stringResource(R.string.update_title), updateDetail(settings.update).orEmpty(), settings.onUpdate)
                 }
             }
             item(key = "about") {
-                Group(R.string.settings_group_about, index = 4) {
+                Card(R.string.settings_group_about, 5, MaterialShapes.Puffy) {
                     LinkRow(
                         R.drawable.ic_build,
                         stringResource(R.string.diagnostics),
                         stringResource(if (settings.recording) R.string.diagnostics_state_on else R.string.diagnostics_state_off),
-                        Tone.Neutral,
                         settings.onDiagnostics,
                     )
-                    LinkRow(R.drawable.ic_open_in_new, stringResource(R.string.settings_source), "", Tone.Neutral, settings.onSource)
+                    LinkRow(R.drawable.ic_open_in_new, stringResource(R.string.settings_source), "", settings.onSource)
                 }
             }
             item(key = "credits") {
@@ -201,99 +206,98 @@ internal fun SettingsScreen(settings: SettingsModel, onBack: () -> Unit, showBac
     }
 }
 
-/** A group's colour: the tile behind each of its rows' icons. */
-private enum class Tone { Primary, Secondary, Tertiary, Neutral }
+/** The hue of the card a row sits in; rows take their colours from it. */
+private val LocalCard = staticCompositionLocalOf<Tint?> { null }
 
+/**
+ * A quick switch, as Orion's quick settings draw them: a rounded tile at rest that fills with the
+ * accent and rounds into a pill when on, its icon's backdrop turning into another shape with it.
+ */
 @Composable
-private fun Tone.colors(): Pair<Color, Color> {
-    val s = MaterialTheme.colorScheme
-    return when (this) {
-        Tone.Primary -> s.primaryContainer to s.onPrimaryContainer
-        Tone.Secondary -> s.secondaryContainer to s.onSecondaryContainer
-        Tone.Tertiary -> s.tertiaryContainer to s.onTertiaryContainer
-        Tone.Neutral -> s.surfaceContainerHighest to s.onSurfaceVariant
+private fun QuickTile(@DrawableRes icon: Int, @StringRes label: Int, on: Boolean, modifier: Modifier = Modifier, onChange: (Boolean) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val corner by animateDpAsState(if (on) 38.dp else 22.dp, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "tile-shape")
+    val fill by animateColorAsState(if (on) scheme.primary else scheme.surfaceContainerHigh, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "tile-fill")
+    val ink = if (on) scheme.onPrimary else scheme.onSurface
+    val shape = RoundedCornerShape(corner)
+    Row(
+        modifier.height(76.dp).clip(shape).background(fill)
+            .toggleable(on, role = Role.Switch, onValueChange = onChange)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MorphBackdrop(on, ink.copy(alpha = 0.14f), 44.dp, from = MaterialShapes.Circle, to = MaterialShapes.Cookie9Sided) {
+            Glyph(icon, ink, size = 22.dp)
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(label), style = MaterialTheme.typography.titleSmall, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(if (on) R.string.state_on else R.string.state_off), style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.72f))
+        }
     }
 }
 
-/** A titled group: its heading in the accent, then its rows on one card with 2 dp between them. */
+/**
+ * A category: a card in its own hue with its name large and a shape turning in its corner, its rows
+ * under it in the same hue, quieter, with the page showing through 2 dp between them.
+ */
 @Composable
-private fun Group(@StringRes title: Int, index: Int, rows: @Composable () -> Unit) {
-    Column(Modifier.reveal(index).padding(bottom = 20.dp)) {
-        Text(
-            stringResource(title),
-            style = MaterialTheme.typography.titleSmallEmphasized,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
-        )
-        Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) { rows() }
+private fun Card(@StringRes title: Int, hue: Int, shape: androidx.graphics.shapes.RoundedPolygon, rows: @Composable () -> Unit) {
+    val tint = rememberTint("settings", hue)
+    Column(Modifier.padding(bottom = 16.dp).clip(RoundedCornerShape(28.dp)), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Box(Modifier.fillMaxWidth().background(tint.container)) {
+            Box(Modifier.matchParentSize().clipToBounds()) {
+                Ornament(shape, tint.ornament, 150.dp, Modifier.align(Alignment.TopEnd).offset(x = 40.dp, y = (-46).dp), periodMs = 36_000)
+            }
+            Text(
+                stringResource(title),
+                style = MaterialTheme.typography.headlineSmall,
+                color = tint.onContainer,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 18.dp),
+            )
+        }
+        CompositionLocalProvider(LocalCard provides tint) { rows() }
     }
 }
 
 @Composable
-private fun RowTile(@DrawableRes icon: Int, tone: Tone) {
-    val (fill, ink) = tone.colors()
-    Box(Modifier.size(40.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
-        Glyph(icon, ink, size = 22.dp)
+private fun RowTile(@DrawableRes icon: Int) {
+    val tint = LocalCard.current
+    Box(
+        Modifier.size(40.dp).clip(MaterialShapes.Cookie9Sided.toShape()).background(tint?.container ?: MaterialTheme.colorScheme.secondaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        Glyph(icon, tint?.onContainer ?: MaterialTheme.colorScheme.onSecondaryContainer, size = 22.dp)
     }
 }
 
 @Composable
 private fun RowText(title: String, detail: String?, modifier: Modifier = Modifier) {
+    val ink = LocalCard.current?.onContainer ?: MaterialTheme.colorScheme.onSurface
     Column(modifier) {
-        Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+        Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = ink)
         if (!detail.isNullOrEmpty()) {
-            Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(detail, style = MaterialTheme.typography.bodyMedium, color = ink.copy(alpha = 0.72f))
         }
     }
 }
 
 private val ROW_MIN = 72.dp
 
-/** A row whose whole surface is its switch; the switch shows a check while on. */
 @Composable
-private fun SwitchRow(
-    @DrawableRes icon: Int,
-    @StringRes title: Int,
-    @StringRes detail: Int,
-    checked: Boolean,
-    tone: Tone,
-    onChange: (Boolean) -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = ROW_MIN).background(Colors.surface)
-            .toggleable(checked, role = Role.Switch, onValueChange = onChange)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RowTile(icon, tone)
-        Spacer(Modifier.width(16.dp))
-        RowText(stringResource(title), stringResource(detail), Modifier.weight(1f))
-        Spacer(Modifier.width(12.dp))
-        Switch(
-            checked = checked,
-            onCheckedChange = null,
-            thumbContent = if (checked) {
-                { Glyph(R.drawable.ic_check, MaterialTheme.colorScheme.primary, size = SwitchDefaults.IconSize) }
-            } else {
-                null
-            },
-        )
-    }
-}
+private fun rowFill(): Color = LocalCard.current?.surface ?: Colors.surface
 
-/** A row that opens something; its current value at the end, in the accent. */
+/** A row that opens something; its current value at the end, in the card's accent. */
 @Composable
-private fun LinkRow(@DrawableRes icon: Int, title: String, value: String, tone: Tone, onClick: () -> Unit) {
+private fun LinkRow(@DrawableRes icon: Int, title: String, value: String, onClick: () -> Unit) {
+    val tint = LocalCard.current
     Row(
-        Modifier.fillMaxWidth().heightIn(min = ROW_MIN).background(Colors.surface)
+        Modifier.fillMaxWidth().heightIn(min = ROW_MIN).background(rowFill())
             .pressable(RoundedCornerShape(4.dp), onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RowTile(icon, tone)
+        RowTile(icon)
         Spacer(Modifier.width(16.dp))
         RowText(title, null, Modifier.weight(1f))
         if (value.isNotEmpty()) {
@@ -301,13 +305,13 @@ private fun LinkRow(@DrawableRes icon: Int, title: String, value: String, tone: 
             Text(
                 value,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = tint?.accent ?: MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 160.dp),
             )
         }
-        Glyph(R.drawable.ic_chevron_right, MaterialTheme.colorScheme.onSurfaceVariant, size = 20.dp)
+        Glyph(R.drawable.ic_chevron_right, (tint?.onContainer ?: MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.7f), size = 20.dp)
     }
 }
 
@@ -315,9 +319,9 @@ private fun LinkRow(@DrawableRes icon: Int, title: String, value: String, tone: 
 @Composable
 private fun ChannelRow(channel: UpdateChannel, onChannel: (UpdateChannel) -> Unit) {
     val view = LocalView.current
-    Column(Modifier.fillMaxWidth().background(Colors.surface).padding(16.dp)) {
+    Column(Modifier.fillMaxWidth().background(rowFill()).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            RowTile(R.drawable.ic_swap, Tone.Primary)
+            RowTile(R.drawable.ic_swap)
             Spacer(Modifier.width(16.dp))
             RowText(stringResource(R.string.update_channel), stringResource(R.string.update_channel_detail), Modifier.weight(1f))
         }
@@ -365,9 +369,9 @@ private fun SchemePicker(appearance: Appearance, onPick: (String) -> Unit) {
     }
     val current = if (appearance.scheme == Appearance.DYNAMIC && !dynamicColorAvailable) SchemeSeed.Rex.id else appearance.scheme
     val chosen = options.firstOrNull { it.first == current }
-    Column(Modifier.fillMaxWidth().background(Colors.surface).padding(vertical = 16.dp)) {
+    Column(Modifier.fillMaxWidth().background(rowFill()).padding(vertical = 16.dp)) {
         Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            RowTile(R.drawable.ic_palette, Tone.Primary)
+            RowTile(R.drawable.ic_palette)
             Spacer(Modifier.width(16.dp))
             RowText(stringResource(R.string.appearance_scheme), chosen?.let { stringResource(it.second) }, Modifier.weight(1f))
         }

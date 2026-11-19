@@ -58,32 +58,6 @@ internal fun Modifier.pressable(
 }
 
 /**
- * The first screenful rises into place, staggered by [index] (45 ms apart), once per item: a row
- * that scrolls back in does not arrive again, and rows past the ninth are simply there, so a fling
- * never shows rows sliding.
- */
-@Composable
-internal fun Modifier.reveal(index: Int): Modifier {
-    // Decided once, from where the row first appeared: a row that later moves into the first nine
-    // (a fold, a filter) is already there and does not arrive again.
-    var done by rememberSaveable { mutableStateOf(index > 8) }
-    // Previews and screenshots show the resting frame.
-    if (LocalInspectionMode.current) return this
-    val progress = remember { Animatable(if (done) 1f else 0f) }
-    val spec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
-    LaunchedEffect(Unit) {
-        if (done) return@LaunchedEffect
-        delay(index * 45L)
-        progress.animateTo(1f, spec)
-        done = true
-    }
-    return graphicsLayer {
-        alpha = progress.value.coerceIn(0f, 1f)
-        translationY = (1f - progress.value) * 28.dp.toPx()
-    }
-}
-
-/**
  * The app's haptics, kept to the owner's rule: a light tick when something latches or toggles, one
  * firm confirm for the big finished moments a person started (connecting, taking a pane over),
  * nothing for taps, scrolls or what the app does on its own.

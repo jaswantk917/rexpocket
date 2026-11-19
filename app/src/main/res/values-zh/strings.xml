@@ -268,7 +268,7 @@
     <string name="appearance_scheme_slate">石板灰</string>
     <string name="appearance_pure_black">纯黑</string>
     <string name="appearance_pure_black_detail">手机为深色时使用纯黑背景</string>
-    <string name="appearance_app_font">Google Sans Flex</string>
+    <string name="appearance_app_font">Space Grotesk</string>
     <string name="appearance_app_font_detail">应用字体；关闭则使用系统字体</string>
     <string name="keybar_always_detail">连接键盘时仍显示按键栏</string>
     <string name="alerts_detail">智能体完成或需要我时通知</string>
@@ -277,4 +277,13 @@
     <string name="field_hide">隐藏</string>
     <string name="holder_phone_tip">本机正在控制此窗格 · 点按交还</string>
     <string name="holder_desk_tip">电脑正在控制此窗格 · 点按接管</string>
+    <plurals name="stat_sessions">
+        <item quantity="other">会话</item>
+    </plurals>
+    <string name="stat_working">运行中</string>
+    <string name="stat_waiting">等你处理</string>
+    <string name="settings_quick">快捷开关</string>
+    <string name="state_on">开</string>
+    <string name="state_off">关</string>
+    <string name="home_attention">需要关注</string>
 </resources>

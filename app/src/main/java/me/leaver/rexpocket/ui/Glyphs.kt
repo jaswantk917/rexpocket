@@ -1,5 +1,12 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -70,7 +77,7 @@ internal fun RoundButton(
     // An icon says less than a word: a pointer resting on it, or a long press, names it. A button
     // that has its own long press keeps it, and its name stays with screen readers.
     TooltipBox(
-        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        positionProvider = rememberTipPosition(),
         tooltip = { PlainTooltip { Text(spoken) } },
         state = rememberTooltipState(),
         // Not focusable: a focusable tooltip is its own window, which takes the keyboard from the
@@ -99,7 +106,7 @@ internal fun RoundButton(
 @Composable
 internal fun Tip(label: String, content: @Composable () -> Unit) {
     TooltipBox(
-        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        positionProvider = rememberTipPosition(),
         tooltip = { PlainTooltip { Text(label) } },
         state = rememberTooltipState(),
         focusable = false,
@@ -148,5 +155,28 @@ internal fun Dot(color: Color, size: Dp, modifier: Modifier = Modifier, ring: Co
         Box(modifier.size(size).clip(CircleShape).background(color))
     } else {
         Box(modifier.size(size + 4.dp).clip(CircleShape).background(ring).padding(2.dp).clip(CircleShape).background(color))
+    }
+}
+
+/**
+ * Where a tooltip goes: on the side of its control with more room - below a control in the top half
+ * of the window, above one in the bottom half - and kept inside the window from edge to edge, so a
+ * control in a corner or under the status bar never pushes its tooltip off the screen.
+ */
+@Composable
+internal fun rememberTipPosition(): PopupPositionProvider {
+    val density = LocalDensity.current
+    val gap = with(density) { 8.dp.roundToPx() }
+    val margin = with(density) { 12.dp.roundToPx() }
+    return remember(gap, margin) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+                val x = (anchorBounds.center.x - popupContentSize.width / 2)
+                    .coerceIn(margin, maxOf(margin, windowSize.width - popupContentSize.width - margin))
+                val below = anchorBounds.center.y < windowSize.height / 2
+                val y = if (below) anchorBounds.bottom + gap else anchorBounds.top - popupContentSize.height - gap
+                return IntOffset(x, y.coerceIn(0, maxOf(0, windowSize.height - popupContentSize.height)))
+            }
+        }
     }
 }

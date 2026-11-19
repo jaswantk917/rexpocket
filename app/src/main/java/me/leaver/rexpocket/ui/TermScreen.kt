@@ -1,5 +1,6 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.semantics.contentDescription
@@ -622,12 +623,22 @@ private fun TermTopBar(
     val under = listOfNotNull(view?.label ?: phaseText(state), path).joinToString(" · ")
     var tabs by remember { mutableStateOf(false) }
     var more by remember { mutableStateOf(false) }
+    // The session's own hue, the one its card wears in the list: the colour says which session this is.
+    val tint = rememberTint(view?.sessionId ?: "")
+    val band by animateColorAsState(if (view != null) tint.container else scheme.surfaceContainer, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "top-bar")
+    val ink = if (view != null) tint.onContainer else scheme.onSurface
+    Box(Modifier.fillMaxWidth().background(band).statusBarsPadding().height(TOP_BAR)) {
+    if (view != null) {
+        Box(Modifier.matchParentSize().clipToBounds()) {
+            Ornament(MaterialShapes.Sunny, tint.ornament, 140.dp, Modifier.align(Alignment.CenterEnd).offset(x = (-40).dp), periodMs = 40_000)
+        }
+    }
     Row(
-        Modifier.fillMaxWidth().background(scheme.surfaceContainer).statusBarsPadding().height(TOP_BAR).padding(horizontal = 4.dp),
+        Modifier.fillMaxSize().padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showBack) {
-            RoundButton(R.drawable.ic_back, stringResource(R.string.action_back), onBack, plate = scheme.surfaceContainerHighest, size = 40.dp)
+            RoundButton(R.drawable.ic_back, stringResource(R.string.action_back), onBack, tint = ink, plate = ink.copy(alpha = 0.10f), size = 40.dp)
         } else {
             Spacer(Modifier.width(12.dp))
         }
@@ -637,21 +648,22 @@ private fun TermTopBar(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
                 AnimatedContent(title, transitionSpec = { captionSwap() }, label = "tab-title") { text ->
-                    Text(text, style = MaterialTheme.typography.titleMediumEmphasized, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text, style = MaterialTheme.typography.titleMediumEmphasized, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Dot(status?.let { statusTint(it) } ?: phaseTint(state.phase), 6.dp)
                     Spacer(Modifier.width(6.dp))
-                    Text(under, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(under, style = MaterialTheme.typography.bodySmall, color = ink.copy(alpha = 0.72f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             tabMenu(tabs) { tabs = false }
         }
         if (state.phase == Phase.Live) HolderChip(state.owning, onHolder)
         Box {
-            RoundButton(R.drawable.ic_more, stringResource(R.string.action_more), { more = true }, tint = scheme.onSurfaceVariant, size = 48.dp)
+            RoundButton(R.drawable.ic_more, stringResource(R.string.action_more), { more = true }, tint = ink.copy(alpha = 0.8f), size = 48.dp)
             overflow(more) { more = false }
         }
+    }
     }
 }
 
@@ -678,6 +690,7 @@ private fun PaneStrip(
     val scheme = MaterialTheme.colorScheme
     val blocks = tab?.blocks.orEmpty()
     var tabs by remember { mutableStateOf(false) }
+    val tint = rememberTint(view?.sessionId ?: "")
     Row(
         Modifier.fillMaxWidth().height(STRIP).padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -713,7 +726,7 @@ private fun PaneStrip(
                 blocks.forEachIndexed { index, block -> key(block.id) {
                     val on = block.id == focused?.id
                     val record = state.blockStatus[block.id]
-                    val fill by animateColorAsState(if (on) scheme.secondaryContainer else scheme.surfaceContainerHigh, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "pane")
+                    val fill by animateColorAsState(if (on) tint.container else scheme.surfaceContainerHigh, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "pane")
                     val outer = 20.dp
                     val inner = 6.dp
                     val shape = RoundedCornerShape(
@@ -731,7 +744,7 @@ private fun PaneStrip(
                         Text(
                             paneTitle(block, record, state.programs[block.id]),
                             style = if (on) MaterialTheme.typography.labelLargeEmphasized else MaterialTheme.typography.labelLarge,
-                            color = if (on) scheme.onSecondaryContainer else scheme.onSurface,
+                            color = if (on) tint.onContainer else scheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.widthIn(max = 96.dp),

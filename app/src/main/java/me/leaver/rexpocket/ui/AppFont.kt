@@ -20,15 +20,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Google Sans Flex, the app's typeface, fetched once from Google Fonts and kept in the app's files.
+ * Space Grotesk, the app's typeface - Orion's - with a geometric, slightly quirky voice that stock
+ * Roboto and Google Sans do not have. It is fetched once from Google Fonts and kept in the app's files.
  * Until it is on the phone - and on a phone that cannot reach Google - the system font stands in;
  * nothing waits for it.
  */
 internal object AppFont {
-    private val weights = listOf(400, 500, 600, 700)
-    private const val CSS = "https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600;700"
+    private val weights = listOf(300, 400, 500, 600, 700)
+    private const val CSS = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700"
 
-    private fun files(context: Context) = weights.map { it to File(context.filesDir, "app-font/google-sans-flex-$it.ttf") }
+    private fun files(context: Context) = weights.map { it to File(context.filesDir, "app-font/space-grotesk-$it.ttf") }
 
     private fun family(files: List<Pair<Int, File>>) = FontFamily(
         files.map { (weight, file) ->
@@ -73,7 +74,7 @@ internal object AppFont {
     }
 }
 
-/** Google Sans Flex once it is on the phone; null meanwhile, or when [wanted] is false. */
+/** Space Grotesk once it is on the phone; null meanwhile, or when [wanted] is false. */
 @Composable
 internal fun rememberAppFont(wanted: Boolean): FontFamily? {
     val context = LocalContext.current
