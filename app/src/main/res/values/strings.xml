@@ -293,4 +293,5 @@
     <string name="home_attention">Needs a look</string>
     <string name="session_new_on">New session on %1$s</string>
     <string name="action_add_another_host">Add another host</string>
+    <string name="filter_active">Active only</string>
 </resources>

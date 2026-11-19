@@ -1,5 +1,14 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.ui.graphics.blur.BlurStop
+import androidx.compose.ui.graphics.blur.BlurRadiusSpec
+import androidx.compose.ui.draw.blur
+import androidx.compose.material3.MediumExtendedFloatingActionButton
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.lazy.items
@@ -152,7 +161,7 @@ import me.leaver.rexpocket.net.TailscaleStatus
 // slots flush with the right edge, so a menu, a fold and a row's chevron share one centre line.
 
 /** Where the credit for the interface goes; the README carries the long version. */
-private const val SOURCE_URL = "https://github.com/leizhiyuan/rexpocket"
+private const val SOURCE_URL = "https://github.com/jaswantk917/rexpocket"
 
 /** The page margin: the cards and the floating controls stand this far from the screen's edge. */
 private val PAGE = 16.dp
@@ -309,28 +318,73 @@ internal fun HomeScreen(
                             }
                         },
                         subtitle = { Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        actions = {
+                            Tip(stringResource(R.string.action_search)) {
+                                IconButton(onClick = { searchOpen = true }, shapes = IconButtonDefaults.shapes()) {
+                                    Glyph(R.drawable.ic_search, LocalContentColor.current)
+                                }
+                            }
+                            Tip(stringResource(R.string.settings)) {
+                                IconButton(onClick = onSettings, shapes = IconButtonDefaults.shapes()) {
+                                    Glyph(R.drawable.ic_settings, LocalContentColor.current)
+                                }
+                            }
+                        },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Colors.bg,
-                            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            // See-through once the list runs under it, which then shows blurred.
+                            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                                .copy(alpha = if (BLUR_UNDER_BAR) 0.72f else 1f),
                         ),
                         scrollBehavior = bar,
                     )
                 }
             },
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).imePadding()) {
+            Box(Modifier.fillMaxSize().imePadding()) {
                 val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 LazyColumn(
-                    Modifier.fillMaxSize(),
+                    // The list runs under the app bar, and the band the bar covers is blurred: only that
+                    // band, fading out below it, so the bar reads as frosted glass over the cards.
+                    Modifier.fillMaxSize().blur {
+                        if (!BLUR_UNDER_BAR || !list.canScrollBackward) return@blur
+                        val bar = padding.calculateTopPadding()
+                        val h = size.height.value.coerceAtLeast(1f)
+                        val edge = (bar.value / h).coerceIn(0f, 1f)
+                        val fade = ((bar.value + BLUR_FADE.value) / h).coerceIn(edge, 1f)
+                        blurRadiusSpec = BlurRadiusSpec.verticalGradient(
+                            listOf(BlurStop(0f, BLUR_RADIUS), BlurStop(edge, BLUR_RADIUS), BlurStop(fade, 0.dp), BlurStop(1f, 0.dp)),
+                        )
+                    },
                     state = list,
                     contentPadding = PaddingValues(
                         start = PAGE,
                         end = PAGE,
-                        top = 4.dp,
+                        top = padding.calculateTopPadding() + 4.dp,
                         // Clear of the toolbar, so the last tab can be scrolled above it.
                         bottom = if (searchOpen) 16.dp else navBottom + 112.dp,
                     ),
                 ) {
+                    if (!searchOpen && hosts.isNotEmpty()) {
+                        item(key = "filters") {
+                            Row(Modifier.animateItem().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = activeOnly,
+                                    onClick = {
+                                        activeOnly = !activeOnly
+                                        Haptics.toggle(view, activeOnly)
+                                    },
+                                    label = { Text(stringResource(R.string.filter_active)) },
+                                    leadingIcon = {
+                                        AnimatedVisibility(activeOnly, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) {
+                                            Glyph(R.drawable.ic_check, LocalContentColor.current, size = FilterChipDefaults.IconSize)
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(50),
+                                )
+                            }
+                        }
+                    }
                     rows.forEachIndexed { index, (host, sessions) ->
                         val live = connected?.id == host.id
                         val hostExpanded = host.id !in collapsedHosts || searchOpen
@@ -477,24 +531,21 @@ internal fun HomeScreen(
                     }
                 }
                 if (!searchOpen) {
-                    HomeToolbar(
-                        expanded = toolbarOpen,
-                        activeOnly = activeOnly,
-                        onSearch = { searchOpen = true },
-                        onActiveOnly = {
-                            activeOnly = !activeOnly
-                            Haptics.toggle(view, activeOnly)
-                        },
-                        onSettings = onSettings,
-                        // A new session is what the button is for once there is a host: on the one
-                        // connected, else the first (it connects on the way). Adding a host is rare
-                        // and lives at the end of the list.
-                        addLabel = stringResource(R.string.session_new_on, (connected ?: hosts.first()).label),
-                        onAdd = { onNewSession(connected ?: hosts.first()) },
-                        // Anchored at the end: folding the toolbar into the add button leaves the button where it was,
-                        // under the thumb, instead of re-centring it on its own.
-                        modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 16.dp),
-                    )
+                    // The one thing this screen starts: a session. It folds to its icon while the list
+                    // is read downwards and opens again on the way back up.
+                    val addLabel = stringResource(R.string.session_new_on, (connected ?: hosts.first()).label)
+                    Box(Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 16.dp)) {
+                        Tip(addLabel) {
+                        MediumExtendedFloatingActionButton(
+                            text = { Text(stringResource(R.string.session_new)) },
+                            icon = { Glyph(R.drawable.ic_add, MaterialTheme.colorScheme.onTertiaryContainer) },
+                            onClick = { onNewSession(connected ?: hosts.first()) },
+                            expanded = toolbarOpen,
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            modifier = Modifier.semantics { contentDescription = addLabel },
+                        )
+                        }
+                    }
                 }
             }
         }
@@ -665,8 +716,9 @@ private fun HostCard(
     val fill by animateColorAsState(if (live) tint.container else Colors.surface, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "host-card")
     val ink = if (live) tint.onContainer else MaterialTheme.colorScheme.onSurface
     Box(
-        Modifier.fillMaxWidth().clip(shape).background(fill)
-            .pressable(shape, onLongClick = { menu = true }, onClick = onToggle)
+        // The fill comes after the press, so the whole card gives under the finger, not only what is on it.
+        Modifier.fillMaxWidth()
+            .pressable(shape, onLongClick = { menu = true }, onClick = onToggle).background(fill)
             .semantics { if (live && !expanded) stateDescription = folded },
     ) {
         // Behind the content, at the card's size: the shapes never make the card taller.
@@ -774,7 +826,7 @@ private fun AttentionCard(session: String, sessionId: String, tab: TabItem, modi
     val waiting = tab.activity?.state == "blocked"
     val shape = RoundedCornerShape(28.dp)
     Column(
-        modifier.width(168.dp).clip(shape).background(tint.container).pressable(shape, onClick = onOpen).padding(16.dp),
+        modifier.width(168.dp).pressable(shape, onClick = onOpen).background(tint.container).padding(16.dp),
     ) {
         Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
             // It turns while the agent works and rests while it waits for you.
@@ -912,7 +964,7 @@ private fun SessionHeader(
         else -> null
     }
     val shape = if (joined) segmentShape(0, 2) else RoundedCornerShape(SEGMENT_OUTER)
-    Box(Modifier.fillMaxWidth().clip(shape).background(tint.container).pressable(shape, onClick = onToggle)) {
+    Box(Modifier.fillMaxWidth().pressable(shape, onClick = onToggle).background(tint.container)) {
         Box(Modifier.matchParentSize()) {
             // Still, at an angle of its own: a list of turning shapes would never stop drawing.
             StillOrnament(MaterialShapes.Sunny, tint.ornament, 120.dp, Modifier.align(Alignment.CenterEnd).offset(x = 36.dp), angle = (row.session.id.hashCode() % 45).toFloat())
@@ -969,8 +1021,7 @@ private fun TabRow(
     val edge by animateDpAsState(if (open) 4.dp else 0.dp, MaterialTheme.motionScheme.fastSpatialSpec(), label = "tab-edge")
     Row(
         Modifier.fillMaxWidth().height(IntrinsicSize.Min).heightIn(min = 64.dp)
-            .clip(shape).background(fill)
-            .pressable(shape, enabled = !opening, onClick = onOpen)
+            .pressable(shape, enabled = !opening, onClick = onOpen).background(fill)
             .semantics { if (open) stateDescription = selected },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1020,8 +1071,10 @@ private fun StatusPill(text: String, color: Color) {
         text,
         style = MaterialTheme.typography.labelLarge,
         color = color,
-        maxLines = 1,
-        modifier = Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.16f)).padding(horizontal = 12.dp, vertical = 6.dp),
+        // Wraps rather than cut "waiting for you" at large text; 16dp is still a full pill on one line.
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(color.copy(alpha = 0.16f)).padding(horizontal = 12.dp, vertical = 6.dp),
     )
 }
 
@@ -1054,49 +1107,6 @@ private fun NotFound(activeOnly: Boolean) {
  * The list's controls, under the thumb: an expressive floating toolbar with search, the activity
  * filter and settings, and the button that adds a host. Scrolling down folds it to the button.
  */
-@Composable
-private fun HomeToolbar(
-    expanded: Boolean,
-    activeOnly: Boolean,
-    onSearch: () -> Unit,
-    onActiveOnly: () -> Unit,
-    onSettings: () -> Unit,
-    addLabel: String,
-    onAdd: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val on = stringResource(R.string.filter_on)
-    val off = stringResource(R.string.filter_off)
-    HorizontalFloatingToolbar(
-        expanded = expanded,
-        modifier = modifier,
-        floatingActionButton = {
-            Tip(addLabel) {
-                FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onAdd, modifier = Modifier.semantics { contentDescription = addLabel }) {
-                    Glyph(R.drawable.ic_add, MaterialTheme.colorScheme.onTertiaryContainer)
-                }
-            }
-        },
-    ) {
-        Tip(stringResource(R.string.action_search)) {
-            IconButton(onClick = onSearch, shapes = IconButtonDefaults.shapes()) { Glyph(R.drawable.ic_search, LocalContentColor.current) }
-        }
-        Tip(stringResource(R.string.action_show_active)) {
-            FilledIconToggleButton(
-                checked = activeOnly,
-                onCheckedChange = { onActiveOnly() },
-                shapes = IconButtonDefaults.toggleableShapes(),
-                modifier = Modifier.semantics { stateDescription = if (activeOnly) on else off },
-            ) {
-                Glyph(if (activeOnly) R.drawable.ic_eye_filled else R.drawable.ic_eye, LocalContentColor.current)
-            }
-        }
-        Tip(stringResource(R.string.settings)) {
-            IconButton(onClick = onSettings, shapes = IconButtonDefaults.shapes()) { Glyph(R.drawable.ic_settings, LocalContentColor.current) }
-        }
-    }
-}
-
 /** The search, in place of the app bar while it is open: back, the field, and clear. */
 @Composable
 private fun SearchBar(
@@ -1524,3 +1534,8 @@ internal fun asSavedHost(
     sshPassphrase = if (parsed.viaSsh) sshPassphrase else "",
     sshHostKey = if (parsed.viaSsh) sshHostKey else "",
 )
+
+/** Real blur needs Android 13; below it the bar stays solid instead of letting sharp cards through. */
+private val BLUR_UNDER_BAR = android.os.Build.VERSION.SDK_INT >= 33
+private val BLUR_RADIUS = 20.dp
+private val BLUR_FADE = 24.dp

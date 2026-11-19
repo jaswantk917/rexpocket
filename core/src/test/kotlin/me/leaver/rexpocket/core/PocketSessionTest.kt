@@ -231,6 +231,42 @@ class PocketSessionTest {
     }
 
     /**
+     * Ending a session makes Rex announce its panes and tabs closing, and the pane being watched
+     * hears it is gone. None of that is a problem to show: the person ended it.
+     */
+    @Test
+    fun endingASessionShowsNoError() {
+        val endpoint = testEndpoint()
+        assumeTrue(
+            "rex plaintext listener on ${endpoint.host}:${endpoint.port} (REX_TEST_HOST/REX_TEST_PORT)",
+            portOpen(endpoint.host, endpoint.port),
+        )
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val session = PocketSession(endpoint)
+            var sessionId: String? = null
+            try {
+                session.start(scope, preferredSessionId = null)
+                withTimeout(15_000) { session.awaitReady() }
+                session.createShell("rexpocket-test-end-" + System.currentTimeMillis())
+                sessionId = session.state.value.activeSessionId
+                val block = awaitWatchedPane(scope, session)
+                val watcher = collectPane(scope, session, block, StringBuilder())
+                session.destroySession()
+                // The closings and the stream's end land just after the call returns.
+                delay(1_500)
+                watcher.cancel()
+                assertNull("ending a session reported: ${session.state.value.notice?.problem}", session.state.value.notice)
+                assertTrue(session.state.value.sessions.none { it.id == sessionId })
+            } finally {
+                session.stop()
+                scope.cancel()
+                sessionId?.let { destroyQuietly(endpoint, it) }
+            }
+        }
+    }
+
+    /**
      * The desktop takes a pane when its window is focused. The phone must not take it back: the two
      * trading it every few seconds resized the program each time and left its prompt half drawn. The
      * pane stays with the desktop and is reported released, until the phone takes it over.

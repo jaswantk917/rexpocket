@@ -79,6 +79,9 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
     val tailnetPath by model.tailnetPath.collectAsState()
     val alerts by model.alerts.collectAsState()
     val keyBar by model.keyBar.collectAsState()
+    // Held here, not in the terminal screen: going back to the list ends that screen, and a key bar
+    // put away by hand must stay away in the next session too.
+    var keyBarChoice by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val upload by model.upload.collectAsState()
     val update by model.update.collectAsState()
     val updateChannel by model.updateChannel.collectAsState()
@@ -150,6 +153,8 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                 TermScreen(
                     embedded = embedded,
                     keyBarWithKeyboard = keyBar,
+                    keyBarChoice = keyBarChoice,
+                    onKeyBarChoice = { keyBarChoice = it },
                     state = pocket,
                     fontScale = font,
                     terminalTypeface = terminalTypeface,

@@ -169,6 +169,9 @@ internal fun TermScreen(
     onRetryUpload: () -> Unit,
     /** True when the key bar is kept even with a keyboard on the desk. */
     keyBarWithKeyboard: Boolean = false,
+    /** The key bar put away (false) or brought back (true) by hand; null leaves it to the setting. */
+    keyBarChoice: Boolean? = null,
+    onKeyBarChoice: (Boolean) -> Unit = {},
     /** True when this pane shares the window with the list, which is then the way back. */
     embedded: Boolean = false,
     onSettings: () -> Unit = {},
@@ -291,8 +294,6 @@ internal fun TermScreen(
     // it was - while the dock and the rest of the bottom chrome rise over it. A program is therefore
     // never resized by the screen keyboard opening, so it never redraws or reflows for it.
     val hardwareKeys = rememberHardwareKeyboard()
-    // Put away or brought back by hand, for as long as this screen lasts; otherwise the setting decides.
-    var keyBarChoice by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val dock = keyBarChoice ?: keyBarShown(hardwareKeys, keyBarWithKeyboard)
     var bottomPx by remember { mutableIntStateOf(0) }
     var panePx by remember { mutableIntStateOf(0) }
@@ -369,9 +370,9 @@ internal fun TermScreen(
                 MenuItem(stringResource(R.string.upload_attach), R.drawable.ic_attach_file) { dismiss(); filePicker.launch("*/*") }
             }
             if (dock) {
-                MenuItem(stringResource(R.string.key_row_hide), R.drawable.ic_keyboard_hide) { dismiss(); keyBarChoice = false }
+                MenuItem(stringResource(R.string.key_row_hide), R.drawable.ic_keyboard_hide) { dismiss(); onKeyBarChoice(false) }
             } else {
-                MenuItem(stringResource(R.string.key_row_show), R.drawable.ic_keyboard) { dismiss(); keyBarChoice = true }
+                MenuItem(stringResource(R.string.key_row_show), R.drawable.ic_keyboard) { dismiss(); onKeyBarChoice(true) }
             }
             MenuItem(stringResource(R.string.settings), R.drawable.ic_settings) { dismiss(); onSettings() }
         }
@@ -456,7 +457,7 @@ internal fun TermScreen(
                         onSelect = { block -> onAct { focusBlock(block.id) } },
                         onPaneMenu = { block -> sheet = Sheet.PaneActions(block.id) },
                         onSplit = { vertical -> onAct { split(vertical = vertical) } },
-                        onShowKeys = if (dock) null else { { keyBarChoice = true } },
+                        onShowKeys = if (dock) null else { { onKeyBarChoice(true) } },
                         tabMenu = tabMenu,
                     )
                 }
@@ -476,7 +477,7 @@ internal fun TermScreen(
                             onAttach = { filePicker.launch("*/*") },
                             attachReady = upload?.running != true,
                             onKeyboard = { toggleKeyboard() },
-                            onHide = { keyBarChoice = false },
+                            onHide = { onKeyBarChoice(false) },
                         )
                     }
                 }

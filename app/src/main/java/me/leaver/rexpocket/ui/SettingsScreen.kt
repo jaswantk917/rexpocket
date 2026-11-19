@@ -292,8 +292,8 @@ private fun rowFill(): Color = LocalCard.current?.surface ?: Colors.surface
 private fun LinkRow(@DrawableRes icon: Int, title: String, value: String, onClick: () -> Unit) {
     val tint = LocalCard.current
     Row(
-        Modifier.fillMaxWidth().heightIn(min = ROW_MIN).background(rowFill())
-            .pressable(RoundedCornerShape(4.dp), onClick = onClick)
+        Modifier.fillMaxWidth().heightIn(min = ROW_MIN)
+            .pressable(RoundedCornerShape(4.dp), onClick = onClick).background(rowFill())
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

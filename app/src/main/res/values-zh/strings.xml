@@ -288,4 +288,5 @@
     <string name="home_attention">需要关注</string>
     <string name="session_new_on">在 %1$s 上新建会话</string>
     <string name="action_add_another_host">添加其他主机</string>
+    <string name="filter_active">只看有活动的</string>
 </resources>

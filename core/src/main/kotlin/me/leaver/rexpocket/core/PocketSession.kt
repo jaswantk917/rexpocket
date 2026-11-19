@@ -845,7 +845,15 @@ class PocketSession(
     }
 
     private suspend fun refreshView(sid: String) {
-        val payload = rpc("session.view", JSONObject().put("session_id", sid))
+        val payload = try {
+            rpc("session.view", JSONObject().put("session_id", sid))
+        } catch (e: RexCallException) {
+            // Ending a session sends its panes' and tabs' closings first, and each asks for a view
+            // the server no longer has. The session is gone, not broken: drop it, say nothing.
+            if (!e.isGone()) throw e
+            dropSession(sid)
+            return
+        }
         applyView(parseView(payload))
     }
 
@@ -935,11 +943,9 @@ class PocketSession(
                 throw e
             } catch (e: RexCallException) {
                 trace("pane $blockId: ${e.code} ${e.message}")
-                // The pane or its session is gone; watching it again cannot help.
-                if (e.code == "not_found" || e.code == "session_not_found") {
-                    note(e.toProblem())
-                    return@flow
-                }
+                // The pane or its session is gone, closed here or on the desktop: the view shows that
+                // already, so there is nothing to report, and watching it again cannot help.
+                if (e.isGone()) return@flow
                 note(e.toProblem())
             } catch (e: Exception) {
                 trace("pane $blockId: ${e.javaClass.simpleName}: ${e.message}")
@@ -1342,3 +1348,6 @@ private const val MAX_WRITE_BATCH = 8_000
 
 private fun String.firstCodePoint(): Int =
     if (isEmpty()) 0 else codePointAt(0)
+
+/** What the server answers about a session or pane that no longer exists. */
+internal fun RexCallException.isGone(): Boolean = code == "not_found" || code == "session_not_found"

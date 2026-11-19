@@ -240,7 +240,7 @@ class Updater(context: Context) {
         const val TAG = "Update"
         const val APK_MIME = "application/vnd.android.package-archive"
         const val USER_AGENT = "RexPocket"
-        const val FEED = "https://api.github.com/repos/leizhiyuan/rexpocket/releases?per_page=10"
+        const val FEED = "https://api.github.com/repos/jaswantk917/rexpocket/releases?per_page=10"
         const val KEY_CHECKED_AT = "update.checkedAt"
         const val KEY_CHANNEL = "update.channel"
         const val CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L

@@ -118,4 +118,4 @@ private const val PASTE_CHARS = 60_000
 
 /** Where a bug report goes: the project's issues, with the version it came from already in the title. */
 private fun issueUrl(): String =
-    "https://github.com/leizhiyuan/rexpocket/issues/new?title=RexPocket%20${BuildConfig.VERSION_NAME}%3A%20"
+    "https://github.com/jaswantk917/rexpocket/issues/new?title=RexPocket%20${BuildConfig.VERSION_NAME}%3A%20"

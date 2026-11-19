@@ -20,7 +20,9 @@ fun signingSetting(name: String): String? =
 
 android {
     namespace = "me.leaver.rexpocket"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) { minorApiLevel = 1 }
+    }
     buildToolsVersion = "36.1.0"
 
     defaultConfig {
@@ -153,7 +155,8 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     implementation(project(":core"))
-    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    // Beta BOM: Compose 1.13 for the progressive blur behind the home app bar (Modifier.blur { blurRadiusSpec }).
+    implementation(platform("androidx.compose:compose-bom-beta:2026.11.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
