@@ -279,4 +279,6 @@
     <string name="update_channel_detail">Preview gets new builds first</string>
     <string name="field_show">Show</string>
     <string name="field_hide">Hide</string>
+    <string name="holder_phone_tip">This phone holds the pane · tap to give it back</string>
+    <string name="holder_desk_tip">The desktop holds the pane · tap to take over</string>
 </resources>

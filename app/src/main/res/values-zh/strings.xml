@@ -275,4 +275,6 @@
     <string name="update_channel_detail">预览版更早收到新版本</string>
     <string name="field_show">显示</string>
     <string name="field_hide">隐藏</string>
+    <string name="holder_phone_tip">本机正在控制此窗格 · 点按交还</string>
+    <string name="holder_desk_tip">电脑正在控制此窗格 · 点按接管</string>
 </resources>

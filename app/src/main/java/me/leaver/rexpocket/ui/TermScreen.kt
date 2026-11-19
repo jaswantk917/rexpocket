@@ -1,5 +1,9 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.material3.DropdownMenu
@@ -756,24 +760,27 @@ private fun PaneStrip(
 private val STRIP = 52.dp
 
 /**
- * Who holds the pane, and the one tap that changes it. While the desk holds it the chip is the
- * action colour and says "Take over"; while this phone does it is quiet and says so, and tapping
- * it hands the pane back. The pane has the holder's size, so this is what decides how it looks.
+ * Who holds the pane, as an icon: the phone while this phone does, the desktop while the desk does.
+ * The pane has the holder's size, so this is what decides how it looks. While the desk holds it the
+ * button is filled in the accent, because taking over is the thing to do; while this phone does it
+ * is quiet, and tapping it hands the pane back. The words are in its tooltip and for TalkBack.
  */
 @Composable
 private fun HolderChip(owning: Boolean, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val label = stringResource(if (owning) R.string.holder_phone else R.string.action_take_over)
-    val action = stringResource(if (owning) R.string.action_release else R.string.action_take_over)
+    val tip = stringResource(if (owning) R.string.holder_phone_tip else R.string.holder_desk_tip)
     val fill by animateColorAsState(if (owning) scheme.surfaceContainerHighest else scheme.primary, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "holder")
-    Box(
-        Modifier.height(36.dp).pressable(RoundedCornerShape(50), onClick = onClick)
-            .semantics { onClick(label = action) { onClick(); true } }
-            .background(fill).padding(horizontal = 14.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        AnimatedContent(label, transitionSpec = { captionSwap() }, label = "holder-label") { text ->
-            Text(text, style = MaterialTheme.typography.labelLarge, color = if (owning) scheme.onSurfaceVariant else scheme.onPrimary, maxLines = 1)
+    val ink = if (owning) scheme.onSurfaceVariant else scheme.onPrimary
+    Tip(tip) {
+        Box(
+            Modifier.size(40.dp).pressable(CircleShape, onClick = onClick)
+                .semantics { contentDescription = tip }
+                .background(fill),
+            contentAlignment = Alignment.Center,
+        ) {
+            AnimatedContent(owning, transitionSpec = { (scaleIn(initialScale = 0.6f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.6f) + fadeOut()) }, label = "holder-icon") { mine ->
+                Glyph(if (mine) R.drawable.ic_phone else R.drawable.ic_desktop, ink, size = 20.dp)
+            }
         }
     }
 }
