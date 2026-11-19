@@ -1,5 +1,6 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
@@ -393,9 +394,7 @@ internal fun HomeScreen(
                         }
                         if (live && hostExpanded && sessions.isNotEmpty()) {
                             item(key = "sessions-title-${host.id}") {
-                                SectionTitle(stringResource(R.string.header_sessions), Modifier.animateItem()) {
-                                    RoundButton(R.drawable.ic_add, stringResource(R.string.session_new), { onNewSession(host) }, plate = MaterialTheme.colorScheme.surfaceContainerHigh, size = 44.dp)
-                                }
+                                SectionTitle(stringResource(R.string.header_sessions), Modifier.animateItem())
                             }
                         }
                         if (hostExpanded) {
@@ -463,6 +462,19 @@ internal fun HomeScreen(
                     if (rows.isEmpty()) {
                         item { NotFound(activeOnly = activeOnly) }
                     }
+                    if (!searchOpen && !activeOnly) {
+                        item(key = "add-host") {
+                            OutlinedButton(
+                                onClick = { creating = true },
+                                shapes = ButtonDefaults.shapes(),
+                                modifier = Modifier.animateItem().fillMaxWidth().padding(top = 8.dp).heightIn(min = 56.dp),
+                            ) {
+                                Glyph(R.drawable.ic_host, MaterialTheme.colorScheme.primary, size = 20.dp)
+                                Spacer(Modifier.width(10.dp))
+                                Text(stringResource(R.string.action_add_another_host))
+                            }
+                        }
+                    }
                 }
                 if (!searchOpen) {
                     HomeToolbar(
@@ -474,7 +486,11 @@ internal fun HomeScreen(
                             Haptics.toggle(view, activeOnly)
                         },
                         onSettings = onSettings,
-                        onAdd = { creating = true },
+                        // A new session is what the button is for once there is a host: on the one
+                        // connected, else the first (it connects on the way). Adding a host is rare
+                        // and lives at the end of the list.
+                        addLabel = stringResource(R.string.session_new_on, (connected ?: hosts.first()).label),
+                        onAdd = { onNewSession(connected ?: hosts.first()) },
                         // Anchored at the end: folding the toolbar into the add button leaves the button where it was,
                         // under the thumb, instead of re-centring it on its own.
                         modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 16.dp),
@@ -1045,6 +1061,7 @@ private fun HomeToolbar(
     onSearch: () -> Unit,
     onActiveOnly: () -> Unit,
     onSettings: () -> Unit,
+    addLabel: String,
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1054,8 +1071,8 @@ private fun HomeToolbar(
         expanded = expanded,
         modifier = modifier,
         floatingActionButton = {
-            Tip(stringResource(R.string.action_add_host)) {
-                FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onAdd) {
+            Tip(addLabel) {
+                FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onAdd, modifier = Modifier.semantics { contentDescription = addLabel }) {
                     Glyph(R.drawable.ic_add, MaterialTheme.colorScheme.onTertiaryContainer)
                 }
             }

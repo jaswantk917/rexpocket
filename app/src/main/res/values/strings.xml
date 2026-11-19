@@ -291,4 +291,6 @@
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
     <string name="home_attention">Needs a look</string>
+    <string name="session_new_on">New session on %1$s</string>
+    <string name="action_add_another_host">Add another host</string>
 </resources>
