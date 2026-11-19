@@ -267,6 +267,47 @@ class PocketSessionTest {
     }
 
     /**
+     * A pane is watched in its own session, even while another one is the active one: asking Rex to
+     * take a pane in the wrong session is refused ("block ... is not in the session") and the pane
+     * sat on "No picture yet", retrying the same mistake.
+     */
+    @Test
+    fun aPaneIsWatchedInItsOwnSession() {
+        val endpoint = testEndpoint()
+        assumeTrue(
+            "rex plaintext listener on ${endpoint.host}:${endpoint.port} (REX_TEST_HOST/REX_TEST_PORT)",
+            portOpen(endpoint.host, endpoint.port),
+        )
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val session = PocketSession(endpoint)
+            val made = mutableListOf<String>()
+            try {
+                session.start(scope, preferredSessionId = null)
+                withTimeout(15_000) { session.awaitReady() }
+                session.createShell("rexpocket-test-other-" + System.currentTimeMillis())
+                made += session.state.value.activeSessionId!!
+                val otherBlock = awaitOwnedFocus(session)
+                session.createShell("rexpocket-test-active-" + System.currentTimeMillis())
+                made += session.state.value.activeSessionId!!
+                assertTrue(session.state.value.activeSessionId != made[0])
+                val seen = StringBuilder()
+                val watcher = collectPane(scope, session, otherBlock, seen)
+                try {
+                    withTimeout(10_000) { while (!synchronized(seen) { seen.startsWith(SNAPSHOT_MARK) }) delay(50) }
+                } finally {
+                    watcher.cancel()
+                }
+                assertNull("watching the other session's pane reported: ${session.state.value.notice?.problem}", session.state.value.notice)
+            } finally {
+                session.stop()
+                scope.cancel()
+                made.forEach { destroyQuietly(endpoint, it) }
+            }
+        }
+    }
+
+    /**
      * The desktop takes a pane when its window is focused. The phone must not take it back: the two
      * trading it every few seconds resized the program each time and left its prompt half drawn. The
      * pane stays with the desktop and is reported released, until the phone takes it over.

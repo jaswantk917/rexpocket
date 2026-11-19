@@ -902,7 +902,10 @@ class PocketSession(
             // A data connection needs a ticket from the control connection: while that one is down,
             // asking for a pane only spins. This waits for it to come back.
             val live = _state.first { it.phase == Phase.Live }
-            val sid = live.activeSessionId
+            // The pane's own session, not the active one: the two differ while sessions switch, and
+            // Rex refuses to give a pane in the wrong session ("block ... is not in the session").
+            // Asked again on every try, so a pane moved to another session follows it.
+            val sid = sessionOf(blockId, live)
             if (sid == null) {
                 // Nothing to watch until a session is open; the connection may still be coming up.
                 delay(backoff)
@@ -1000,6 +1003,14 @@ class PocketSession(
      * before that, Rex refuses it, and the stream then waits out its backoff while the pane stays
      * empty - the wait a pane used to sit through after the app came back.
      */
+    /** The session [blockId] is in, as far as the views the phone holds say; else the active one. */
+    private fun sessionOf(blockId: String, st: PocketState): String? {
+        fun SessionView.has() = allBlocks().any { it.id == blockId }
+        return st.view?.takeIf { it.has() }?.sessionId
+            ?: st.views.values.firstOrNull { it.has() }?.sessionId
+            ?: st.activeSessionId
+    }
+
     private suspend fun ticket(sid: String, blockId: String): String {
         attached.first { it }
         val payload = rpc(
