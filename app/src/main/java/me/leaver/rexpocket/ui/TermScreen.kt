@@ -630,7 +630,7 @@ private fun TermTopBar(
     Box(Modifier.fillMaxWidth().background(band).statusBarsPadding().height(TOP_BAR)) {
     if (view != null) {
         Box(Modifier.matchParentSize().clipToBounds()) {
-            Ornament(MaterialShapes.Sunny, tint.ornament, 140.dp, Modifier.align(Alignment.CenterEnd).offset(x = (-40).dp), periodMs = 40_000)
+            StillOrnament(MaterialShapes.Sunny, tint.ornament, 140.dp, Modifier.align(Alignment.CenterEnd).offset(x = (-40).dp))
         }
     }
     Row(

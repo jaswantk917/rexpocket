@@ -68,13 +68,20 @@ internal data class Tint(
 /** The hue a key always gets, the same on every screen and every launch. */
 internal fun hueSeed(key: String): Long = HUES[(key.hashCode() and 0x7fffffff) % HUES.size]
 
+/**
+ * Worked-out tints, kept for the life of the process: building a hue's tonal family is a few
+ * milliseconds, too slow to redo each time a card scrolls back in. Six hues, light and dark, and
+ * the page they sit on: a handful of entries.
+ */
+private val tints = HashMap<Triple<Long, Boolean, Color>, Tint>()
+
 /** The tint for [key]; [hue] picks one of the hues by number instead, for a set that must not repeat. */
 @Composable
 internal fun rememberTint(key: String, hue: Int? = null): Tint {
     val dark = Colors.isDark
     val page = Colors.surface
-    return remember(key, hue, dark, page) {
-        val seed = hue?.let { HUES[it % HUES.size] } ?: hueSeed(key)
+    val seed = hue?.let { HUES[it % HUES.size] } ?: hueSeed(key)
+    return tints.getOrPut(Triple(seed, dark, page)) {
         val s = dynamicColorScheme(Color(seed), dark, false, style = PaletteStyle.TonalSpot)
         Tint(
             container = s.primaryContainer,
@@ -84,6 +91,12 @@ internal fun rememberTint(key: String, hue: Int? = null): Tint {
             ornament = s.onPrimaryContainer.copy(alpha = if (dark) 0.10f else 0.07f),
         )
     }
+}
+
+/** A Material shape at rest behind content, turned to [angle]: an ornament that costs no frames. */
+@Composable
+internal fun StillOrnament(shape: RoundedPolygon, color: Color, size: Dp, modifier: Modifier = Modifier, angle: Float = 0f) {
+    Box(modifier.size(size).graphicsLayer { rotationZ = angle }.background(color, shape.toShape()))
 }
 
 /** A Material shape that turns slowly behind content: a hero's ornament. Still in previews. */

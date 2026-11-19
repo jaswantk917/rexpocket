@@ -761,7 +761,12 @@ private fun AttentionCard(session: String, sessionId: String, tab: TabItem, modi
         modifier.width(168.dp).clip(shape).background(tint.container).pressable(shape, onClick = onOpen).padding(16.dp),
     ) {
         Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
-            Ornament(if (waiting) MaterialShapes.Cookie12Sided else MaterialShapes.Sunny, tint.accent.copy(alpha = 0.18f), 64.dp, periodMs = if (waiting) 60_000 else 9_000)
+            // It turns while the agent works and rests while it waits for you.
+            if (waiting) {
+                StillOrnament(MaterialShapes.Cookie12Sided, tint.accent.copy(alpha = 0.18f), 64.dp)
+            } else {
+                Ornament(MaterialShapes.Sunny, tint.accent.copy(alpha = 0.18f), 64.dp, periodMs = 9_000)
+            }
             ProgramTile(tab.program, size = 36.dp)
         }
         Spacer(Modifier.height(14.dp))
@@ -893,7 +898,8 @@ private fun SessionHeader(
     val shape = if (joined) segmentShape(0, 2) else RoundedCornerShape(SEGMENT_OUTER)
     Box(Modifier.fillMaxWidth().clip(shape).background(tint.container).pressable(shape, onClick = onToggle)) {
         Box(Modifier.matchParentSize()) {
-            Ornament(MaterialShapes.Sunny, tint.ornament, 120.dp, Modifier.align(Alignment.CenterEnd).offset(x = 36.dp), periodMs = 40_000)
+            // Still, at an angle of its own: a list of turning shapes would never stop drawing.
+            StillOrnament(MaterialShapes.Sunny, tint.ornament, 120.dp, Modifier.align(Alignment.CenterEnd).offset(x = 36.dp), angle = (row.session.id.hashCode() % 45).toFloat())
         }
         Row(
             Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(start = 20.dp, end = 4.dp),

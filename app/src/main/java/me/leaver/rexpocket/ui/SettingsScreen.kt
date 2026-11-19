@@ -247,7 +247,7 @@ private fun Card(@StringRes title: Int, hue: Int, shape: androidx.graphics.shape
     Column(Modifier.padding(bottom = 16.dp).clip(RoundedCornerShape(28.dp)), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Box(Modifier.fillMaxWidth().background(tint.container)) {
             Box(Modifier.matchParentSize().clipToBounds()) {
-                Ornament(shape, tint.ornament, 150.dp, Modifier.align(Alignment.TopEnd).offset(x = 40.dp, y = (-46).dp), periodMs = 36_000)
+                StillOrnament(shape, tint.ornament, 150.dp, Modifier.align(Alignment.TopEnd).offset(x = 40.dp, y = (-46).dp), angle = hue * 17f)
             }
             Text(
                 stringResource(title),
