@@ -238,13 +238,20 @@ fun foregroundProgram(process: JSONObject): String? {
 }
 
 /**
+ * The status mark an agent puts in front of its title and animates - Claude Code's spinner, for one,
+ * turns several times a second. It is not part of the name, and kept it would make every frame of
+ * the spinner a new title, and so a new state for every screen that shows titles.
+ */
+private val STATUS_GLYPH = Regex("^[\\p{So}\\p{Sm}·•*]+(\\s+|$)")
+
+/**
  * The title a program set, from Rex's `title` answer or `title_changed` event, or null when it is
  * not one to show. A shell writes the command it is about to run, or `user@host:dir`, into the
  * title; that is noise, and Rex says who set it, so only a title from a program other than a shell
  * is kept - `π - rexpocket` from pi, not `( exec -a claude … )` from zsh.
  */
 fun programTitle(answer: JSONObject): String? {
-    val title = answer.optNullableString("title")?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val title = answer.optNullableString("title")?.trim()?.replace(STATUS_GLYPH, "")?.takeIf { it.isNotEmpty() } ?: return null
     val owner = answer.optJSONObject("owner")?.optNullableString("name")
     return if (programMark(owner) == ProgramMark.Shell) null else title
 }

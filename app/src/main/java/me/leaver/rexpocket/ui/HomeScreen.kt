@@ -1,5 +1,6 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ButtonGroupDefaults
@@ -157,11 +158,25 @@ private val KEY_TEXT = 64.dp
 private val TILE = 36.dp
 
 /** One session of a host, with the tabs the phone knows of; [view] is null until it is loaded. */
+@Immutable
 private data class HomeSession(
     val session: ListedSession,
     val view: SessionView?,
-    val tabs: List<WindowInfo>,
+    val tabs: List<TabItem>,
     val activity: Boolean,
+)
+
+/**
+ * One tab as its row shows it, worked out once per state. Rows take this rather than the whole
+ * state, so a title or a status changing in one tab recomposes that row and not the list.
+ */
+@Immutable
+private data class TabItem(
+    val id: String,
+    val title: String,
+    val program: String?,
+    val panes: Int,
+    val activity: ProgramRecord?,
 )
 
 /** A pane that is working or waiting is what the eye filters on. */
@@ -241,7 +256,16 @@ internal fun HomeScreen(
                 val labelMatch = hostMatch || session.label.lowercase().contains(q)
                 // The eye keeps the tabs that are doing something; search then narrows by name.
                 val activeTabs = if (activeOnly) tabs.filter { window -> window.blocks.any { state.activityOf(it) != null } } else tabs
-                val shownTabs = if (labelMatch || view == null) activeTabs else activeTabs.filter { tabTitle(view, it, state).lowercase().contains(q) }
+                val items = if (view == null) emptyList() else activeTabs.map { window ->
+                    TabItem(
+                        id = window.id,
+                        title = tabTitle(view, window, state),
+                        program = tabProgram(window, state),
+                        panes = window.blocks.size,
+                        activity = window.blocks.firstNotNullOfOrNull { state.activityOf(it) },
+                    )
+                }
+                val shownTabs = if (labelMatch) items else items.filter { it.title.lowercase().contains(q) }
                 if (!labelMatch && shownTabs.isEmpty()) return@mapNotNull null
                 HomeSession(session, view, shownTabs, sessionActivity)
             }
@@ -362,15 +386,22 @@ internal fun HomeScreen(
                                     }
                                 }
                                 if (showTabs) {
-                                    item(key = "tabs-${row.session.id}") {
-                                        TabGroup(
-                                            row = row,
-                                            state = state,
-                                            opening = openingThis,
-                                            open = detail && live && state.activeSessionId == row.session.id,
-                                            onOpen = { windowId -> onOpenTab(host, row.session.id, windowId) },
-                                            modifier = Modifier.animateItem().reveal(order),
-                                        )
+                                    // One item per tab: a session with many tabs is composed as it
+                                    // scrolls in, a row at a time, not all at once.
+                                    val onScreen = if (detail && live && state.activeSessionId == row.session.id) state.view?.activeWindowId else null
+                                    row.tabs.forEachIndexed { index, tab ->
+                                        item(key = "tab-${row.session.id}-${tab.id}") {
+                                            Column(Modifier.animateItem().reveal(order)) {
+                                                Spacer(Modifier.height(SEGMENT_GAP))
+                                                TabRow(
+                                                    tab = tab,
+                                                    opening = openingThis,
+                                                    open = tab.id == onScreen,
+                                                    shape = segmentShape(index + 1, row.tabs.size + 1),
+                                                    onOpen = { onOpenTab(host, row.session.id, tab.id) },
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                                 item(key = "gap-${row.session.id}") { Spacer(Modifier.height(12.dp)) }
@@ -742,46 +773,13 @@ private fun SessionHeader(
     }
 }
 
-/** The tabs of one session: the rest of its segmented group, the tab on screen beside it marked. */
-@Composable
-private fun TabGroup(
-    row: HomeSession,
-    state: PocketState,
-    opening: Boolean,
-    /** True for the session whose tab the pane beside the list is showing. */
-    open: Boolean,
-    onOpen: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier.fillMaxWidth()) {
-        row.tabs.forEachIndexed { index, window ->
-            Spacer(Modifier.height(SEGMENT_GAP))
-            val activity = window.blocks.firstNotNullOfOrNull { state.activityOf(it) }
-            TabRow(
-                title = row.view?.let { tabTitle(it, window, state) } ?: window.label,
-                program = tabProgram(window, state),
-                panes = window.blocks.size,
-                activity = activity,
-                opening = opening,
-                open = open && window.id == state.view?.activeWindowId,
-                // The session's head is segment 0; its tabs follow it.
-                shape = segmentShape(index + 1, row.tabs.size + 1),
-                onOpen = { onOpen(window.id) },
-            )
-        }
-    }
-}
-
 /**
  * One tab: the mark of what runs in it, its name and panes, and what it is doing at the end - a
  * living loader while an agent works, an amber "needs you" while one waits.
  */
 @Composable
 private fun TabRow(
-    title: String,
-    program: String?,
-    panes: Int,
-    activity: ProgramRecord?,
+    tab: TabItem,
     opening: Boolean,
     /** True for the tab the pane beside the list is showing. */
     open: Boolean,
@@ -799,11 +797,11 @@ private fun TabRow(
             .padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ProgramTile(program, size = TILE)
+        ProgramTile(tab.program, size = TILE)
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
             Text(
-                title,
+                tab.title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
                 color = if (open) scheme.onSecondaryContainer else scheme.onSurface,
@@ -811,12 +809,13 @@ private fun TabRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                pluralStringResource(R.plurals.pane_count, panes, panes),
+                pluralStringResource(R.plurals.pane_count, tab.panes, tab.panes),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
                 maxLines = 1,
             )
         }
+        val activity = tab.activity
         AnimatedContent(activity?.state, transitionSpec = { (scaleIn(initialScale = 0.6f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.6f) + fadeOut()) }, label = "tab-activity") { state ->
             when (state) {
                 "working" -> LoadingIndicator(Modifier.size(36.dp))

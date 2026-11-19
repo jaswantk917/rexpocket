@@ -120,6 +120,19 @@ class RexModelsTest {
         assertNull(programTitle(org.json.JSONObject("""{"title":""}""")))
     }
 
+    /** An agent's animated status mark is not part of its title, so a turning spinner is one title. */
+    @Test
+    fun aSpinnerInFrontOfATitleIsNotPartOfIt() {
+        fun title(text: String) = programTitle(org.json.JSONObject("""{"title":"$text","owner":{"pid":1,"name":"claude"}}"""))
+        assertEquals("Flutter PR reviewer", title("✳ Flutter PR reviewer"))
+        assertEquals("Flutter PR reviewer", title("⠐ Flutter PR reviewer"))
+        assertEquals("Flutter PR reviewer", title("⠂ Flutter PR reviewer"))
+        assertEquals("Flutter PR reviewer", title("· Flutter PR reviewer"))
+        assertEquals("π - rexpocket", title("π - rexpocket"))
+        assertEquals("2 + 2", title("2 + 2"))
+        assertNull(title("✳ "))
+    }
+
     /** A program has a mark when the app knows it; aliases and paths reach the same one. */
     @Test
     fun aProgramGetsItsMark() {
