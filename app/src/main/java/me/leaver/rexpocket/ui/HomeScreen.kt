@@ -1,5 +1,7 @@
 package me.leaver.rexpocket.ui
 
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.expandHorizontally
@@ -330,12 +332,20 @@ internal fun HomeScreen(
                                 }
                             }
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Colors.bg,
-                            // See-through once the list runs under it, which then shows blurred.
-                            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                                .copy(alpha = if (BLUR_UNDER_BAR) 0.72f else 1f),
-                        ),
+                        // With the blur, Ghanti's header: no bar of its own, the page's colour fading from
+                        // 85% to 65% over the softened cards (drawn behind it below). Without, a solid bar.
+                        colors = if (BLUR_UNDER_BAR) {
+                            TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent)
+                        } else {
+                            TopAppBarDefaults.topAppBarColors(containerColor = Colors.bg, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer)
+                        },
+                        modifier = if (BLUR_UNDER_BAR) {
+                            Modifier.drawBehind {
+                                drawRect(Brush.verticalGradient(0f to Colors.bg.copy(alpha = 0.85f), 0.65f to Colors.bg.copy(alpha = 0.65f), 1f to Colors.bg.copy(alpha = 0.65f)))
+                            }
+                        } else {
+                            Modifier
+                        },
                         scrollBehavior = bar,
                     )
                 }
@@ -344,16 +354,24 @@ internal fun HomeScreen(
             Box(Modifier.fillMaxSize().imePadding()) {
                 val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 LazyColumn(
-                    // The list runs under the app bar, and the band the bar covers is blurred: only that
-                    // band, fading out below it, so the bar reads as frosted glass over the cards.
+                    // Ghanti's edges: the list runs under the app bar and the nav bar and melts into a
+                    // progressive blur there, held strong until close to the bar so the cards just
+                    // under it are soft, not merely hazy. The bar's height is read while drawing, so
+                    // collapsing it moves the blur without recomposing.
                     Modifier.fillMaxSize().blur {
-                        if (!BLUR_UNDER_BAR || !list.canScrollBackward) return@blur
-                        val bar = padding.calculateTopPadding()
-                        val h = size.height.value.coerceAtLeast(1f)
-                        val edge = (bar.value / h).coerceIn(0f, 1f)
-                        val fade = ((bar.value + BLUR_FADE.value) / h).coerceIn(edge, 1f)
+                        if (!BLUR_UNDER_BAR) return@blur
+                        val h = size.height.value
+                        if (h <= 0f) return@blur
+                        val topEnd = (padding.calculateTopPadding().value / h).coerceIn(0.01f, 0.4f)
+                        val bottomStart = (1f - (navBottom + 24.dp).value / h).coerceIn(0.6f, 0.99f)
                         blurRadiusSpec = BlurRadiusSpec.verticalGradient(
-                            listOf(BlurStop(0f, BLUR_RADIUS), BlurStop(edge, BLUR_RADIUS), BlurStop(fade, 0.dp), BlurStop(1f, 0.dp)),
+                            listOf(
+                                BlurStop(0f, 18.dp),
+                                BlurStop(topEnd * 0.75f, 8.dp),
+                                BlurStop(topEnd, 0.dp),
+                                BlurStop(bottomStart, 0.dp),
+                                BlurStop(1f, 24.dp),
+                            ),
                         )
                     },
                     state = list,
@@ -1535,7 +1553,8 @@ internal fun asSavedHost(
     sshHostKey = if (parsed.viaSsh) sshHostKey else "",
 )
 
-/** Real blur needs Android 13; below it the bar stays solid instead of letting sharp cards through. */
-private val BLUR_UNDER_BAR = android.os.Build.VERSION.SDK_INT >= 33
-private val BLUR_RADIUS = 20.dp
-private val BLUR_FADE = 24.dp
+/**
+ * The edge blur needs Android 13 to vary its radius, and is heavy for Mali GPUs, so it is on for
+ * Pixels only, as in Ghanti; elsewhere the bar stays solid instead of letting sharp cards through.
+ */
+private val BLUR_UNDER_BAR = android.os.Build.VERSION.SDK_INT >= 33 && android.os.Build.MANUFACTURER.equals("Google", ignoreCase = true)
