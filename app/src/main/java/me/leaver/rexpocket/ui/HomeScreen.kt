@@ -392,7 +392,9 @@ internal fun HomeScreen(
                         },
                         onSettings = onSettings,
                         onAdd = { creating = true },
-                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
+                        // Anchored at the end: folding the toolbar into the add button leaves the button where it was,
+                        // under the thumb, instead of re-centring it on its own.
+                        modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 16.dp),
                     )
                 }
             }
