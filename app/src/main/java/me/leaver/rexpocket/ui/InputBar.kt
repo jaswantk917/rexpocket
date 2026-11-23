@@ -81,19 +81,27 @@ import me.leaver.rexpocket.core.KeyPress
 import me.leaver.rexpocket.core.Latch
 import me.leaver.rexpocket.core.Mod
 import kotlin.math.abs
+import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.offset
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.animateOffsetAsState
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Animatable
 
 // The bar under the terminal: the keys a phone keyboard does not have, in floating groups.
 
 /**
  * The bar under the terminal, after Rex for iOS: two floating groups on the terminal's paper. The
  * keys a phone keyboard lacks share the wide pill, which shows what fits and scrolls to the rest;
- * the arrow stick and the keyboard key keep the right, always in the same place.
+ * the arrow stick keeps the right, always in the same place. Tapping the terminal raises the keyboard.
  *
  * The pill starts with what an agent asks for most: back out, interrupt, complete, accept, `ctrl`.
  * Paste, the paperclip and a slash for pi's command menu follow off the edge. C-c is red while the
  * program works or waits. `ctrl` applies to the next key, from this row or from the phone keyboard;
  * a quick second tap keeps it on, and holding it opens the other control chords. Return held is
- * shift-Return: a new line in an agent's prompt.
+ * shift-Return, a new line in an agent's prompt; Tab held is shift-Tab, which cycles an agent's modes.
  *
  * The paperclip is the dock's way to send a file or an image: it opens the platform's picker, and
  * goes quiet while the file picked last is still on its way.
@@ -103,7 +111,6 @@ internal fun KeyBar(
     mods: KeyModifiers,
     /** True while the program in the pane works or waits: C-c is then the key that stops it. */
     busy: Boolean,
-    imeUp: Boolean,
     onMod: (Mod) -> Unit,
     onKey: (key: KeyPress, own: String) -> Unit,
     onNewLine: () -> Unit,
@@ -111,10 +118,8 @@ internal fun KeyBar(
     onAttach: () -> Unit,
     /** False while an upload is running: a second file would only be dropped. */
     attachReady: Boolean,
-    onKeyboard: () -> Unit,
     /** Puts the bar away; the top bar then offers it back. */
     onHide: () -> Unit,
-    showShift: Boolean = false,
     showAlt: Boolean = false,
 ) {
     val haptics = LocalHapticFeedback.current
@@ -136,7 +141,15 @@ internal fun KeyBar(
                 Key(stringResource(R.string.key_ctrl_c), key, color = if (busy) Colors.danger else Colors.ink) {
                     onKey(KeyPress("key_c", 'c'.code, text = "c"), "ctrl")
                 }
-                Key(stringResource(R.string.key_tab), key, icon = R.drawable.ic_tab_key) { onKey(KeyPress("tab", 0), "") }
+                Key(
+                    stringResource(R.string.key_tab),
+                    key,
+                    icon = R.drawable.ic_tab_key,
+                    onLongClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onKey(KeyPress("tab", 0), "shift")
+                    },
+                ) { onKey(KeyPress("tab", 0), "") }
                 Key(
                     stringResource(R.string.action_enter),
                     key,
@@ -149,17 +162,15 @@ internal fun KeyBar(
                 CtrlKey(mods[Mod.Ctrl], key, onTap = { onMod(Mod.Ctrl) }) { letter ->
                     onKey(KeyPress("key_$letter", letter.code, text = letter.toString()), "ctrl")
                 }
-                for (mod in listOfNotNull(if (showShift) Mod.Shift else null, if (showAlt) Mod.Alt else null)) {
-                    val isShift = mod == Mod.Shift
-                    val latch = mods[mod]
+                if (showAlt) {
+                    val latch = mods[Mod.Alt]
                     val description = modState(latch)
                     Key(
-                        label = stringResource(if (isShift) R.string.key_shift else R.string.key_alt),
+                        label = stringResource(R.string.key_alt),
                         modifier = key.semantics { stateDescription = description },
                         color = modInk(latch),
                         plate = modPlate(latch),
-                        icon = if (isShift) R.drawable.ic_shift else null,
-                    ) { onMod(mod) }
+                    ) { onMod(Mod.Alt) }
                 }
                 Key(stringResource(R.string.key_paste), key, icon = R.drawable.ic_paste) { onPaste() }
                 Key(
@@ -190,49 +201,42 @@ internal fun KeyBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ArrowStick(Modifier.size(KEY_SIZE)) { code -> onKey(KeyPress(code, 0), "") }
-            Key(
-                stringResource(R.string.key_keyboard),
-                Modifier.size(KEY_SIZE),
-                icon = if (imeUp) R.drawable.ic_keyboard_hide else R.drawable.ic_keyboard,
-            ) { onKeyboard() }
         }
         RoundButton(R.drawable.ic_expand, stringResource(R.string.key_row_hide), onHide, tint = Colors.muted, size = 32.dp, iconSize = 20.dp)
     }
 }
 
 /**
- * The four arrows behind one key. A tap pins the arrow pad above it, four keys laid out as on a
- * desk keyboard, each sending its arrow on a tap and repeating while held; it stays until the key
- * is tapped again, so a menu can be walked one tap at a time.
+ * The four arrows in one key, which is a joystick: press it and slide. The arrow goes once as the
+ * finger crosses into its direction, and only once - back through the middle and out again sends
+ * the next. Pushed on out to the rim, it repeats until the finger eases back. A slide across a
+ * diagonal keeps the arrow it had a little longer, so the direction does not flicker between two.
  *
- * Pressed and slid, the key is a stick instead: the arrow goes once as the finger crosses into its
- * direction, and only once - back through the middle and out again sends the next. Pushed on out
- * to the rim, it repeats until the finger eases back. A slide across a diagonal keeps the arrow it
- * had a little longer, so the direction does not flicker between two.
- *
- * The stick's face shows above the bar while it is held, so the finger does not hide which way it
- * points. The gesture is the stick's own, so the bar and the pane never take it for a scroll.
+ * The key's mark follows the finger and springs home, and the stick's face shows above the bar from
+ * the moment it is pressed, so the finger does not hide which way it points. The gesture is the
+ * stick's own, so the bar and the pane never take it for a scroll.
  */
 @Composable
 private fun ArrowStick(modifier: Modifier, onArrow: (String) -> Unit) {
     var held by remember { mutableStateOf(false) }
-    var steering by remember { mutableStateOf(false) }
-    var pinned by remember { mutableStateOf(false) }
     var direction by remember { mutableStateOf<String?>(null) }
     var knob by remember { mutableStateOf(Offset.Zero) }
     val arrow by rememberUpdatedState(onArrow)
     val haptics = LocalHapticFeedback.current
     val config = LocalViewConfiguration.current
-    val deadZone = with(LocalDensity.current) { STICK_DEAD_ZONE.toPx() }.coerceAtLeast(config.touchSlop)
+    val density = LocalDensity.current
+    val deadZone = with(density) { STICK_DEAD_ZONE.toPx() }.coerceAtLeast(config.touchSlop)
+    val travel = with(density) { STICK_KEY_TRAVEL.toPx() }
+    val homeward: FiniteAnimationSpec<Offset> = if (held) snap() else MaterialTheme.motionScheme.defaultSpatialSpec()
+    val mark by animateOffsetAsState(knob, homeward, label = "stick-mark")
     val label = stringResource(R.string.key_arrows)
-    val pinnedState = stringResource(if (pinned) R.string.arrows_pinned else R.string.mod_off)
     val names = listOf(
         stringResource(R.string.key_left) to "arrow_left",
         stringResource(R.string.key_up) to "arrow_up",
         stringResource(R.string.key_down) to "arrow_down",
         stringResource(R.string.key_right) to "arrow_right",
     )
-    val edge = with(LocalDensity.current) { POPUP_EDGE.roundToPx() }
+    val edge = with(density) { POPUP_EDGE.roundToPx() }
     val above = remember(edge) {
         object : PopupPositionProvider {
             override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
@@ -246,12 +250,10 @@ private fun ArrowStick(modifier: Modifier, onArrow: (String) -> Unit) {
     }
     Box(
         modifier.clip(CircleShape)
-            .background(if (held || pinned) Colors.keyOn else Colors.clear)
+            .background(if (held) Colors.keyOn else Colors.clear)
             .semantics {
                 contentDescription = label
-                stateDescription = pinnedState
                 role = Role.Button
-                onClick { pinned = !pinned; true }
                 customActions = names.map { (name, code) -> CustomAccessibilityAction(name) { arrow(code); true } }
             }
             .pointerInput(deadZone) {
@@ -261,23 +263,15 @@ private fun ArrowStick(modifier: Modifier, onArrow: (String) -> Unit) {
                         val down = awaitFirstDown(pass = PointerEventPass.Initial)
                         down.consume()
                         held = true
-                        steering = false
                         direction = null
                         knob = Offset.Zero
+                        var steering = false
                         var repeating: Job? = null
-                        var tapped = false
                         try {
                             while (true) {
                                 val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
                                 change.consume()
-                                if (!change.pressed) {
-                                    // A press that never became a slide is a tap: it pins the pad,
-                                    // or puts it away.
-                                    val inside = change.position.x in 0f..size.width.toFloat() &&
-                                        change.position.y in 0f..size.height.toFloat()
-                                    tapped = !steering && inside
-                                    break
-                                }
+                                if (!change.pressed) break
                                 val delta = change.position - down.position
                                 if (!steering && delta.getDistance() < config.touchSlop) continue
                                 steering = true
@@ -309,92 +303,28 @@ private fun ArrowStick(modifier: Modifier, onArrow: (String) -> Unit) {
                         } finally {
                             repeating?.cancel()
                             held = false
-                            steering = false
                             direction = null
                             knob = Offset.Zero
                         }
-                        if (tapped) pinned = !pinned
                     }
                 }
             },
         contentAlignment = Alignment.Center,
     ) {
-        Glyph(R.drawable.ic_joystick, if (held || pinned) Colors.accent else Colors.ink, size = 24.dp)
-        if (steering) {
+        Box(
+            Modifier.offset {
+                val distance = mark.getDistance()
+                val moved = if (distance > travel) mark * (travel / distance) else mark
+                IntOffset(moved.x.roundToInt(), moved.y.roundToInt())
+            },
+        ) {
+            Glyph(R.drawable.ic_joystick, if (held) Colors.accent else Colors.ink, size = 24.dp)
+        }
+        if (held) {
             Popup(popupPositionProvider = above, properties = PopupProperties(focusable = false, clippingEnabled = false)) {
                 StickFace(direction, knob, deadZone)
             }
-        } else if (pinned) {
-            // Not focusable, so the phone keyboard stays up with it; it goes when the key is tapped.
-            Popup(popupPositionProvider = above, properties = PopupProperties(focusable = false)) {
-                ArrowPad { code -> arrow(code) }
-            }
         }
-    }
-}
-
-/** The pinned arrow pad: up over left, down and right, as the arrows sit on a desk keyboard. */
-@Composable
-private fun ArrowPad(onArrow: (String) -> Unit) {
-    Column(
-        Modifier.floating(RoundedCornerShape(Radius.card)).padding(PAD_INSET),
-        verticalArrangement = Arrangement.spacedBy(PAD_GAP),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        PadKey("arrow_up", R.drawable.ic_arrow_up, R.string.key_up, onArrow)
-        Row(horizontalArrangement = Arrangement.spacedBy(PAD_GAP)) {
-            PadKey("arrow_left", R.drawable.ic_arrow_left, R.string.key_left, onArrow)
-            PadKey("arrow_down", R.drawable.ic_arrow_down, R.string.key_down, onArrow)
-            PadKey("arrow_right", R.drawable.ic_arrow_right, R.string.key_right, onArrow)
-        }
-    }
-}
-
-/**
- * One arrow of the pad: sent as the finger lands, and again and again once it has stayed down past
- * the repeat delay, until it lifts. Holding is deliberate here, so repeating is what it asks for.
- */
-@Composable
-private fun PadKey(code: String, icon: Int, name: Int, onArrow: (String) -> Unit) {
-    var pressed by remember { mutableStateOf(false) }
-    val arrow by rememberUpdatedState(onArrow)
-    val haptics = LocalHapticFeedback.current
-    val label = stringResource(name)
-    Box(
-        Modifier.size(PAD_KEY).clip(RoundedCornerShape(Radius.chip))
-            .background(if (pressed) Colors.keyOn else Colors.key)
-            .semantics { contentDescription = label; role = Role.Button; onClick { arrow(code); true } }
-            .pointerInput(code) {
-                coroutineScope {
-                    awaitEachGesture {
-                        val down = awaitFirstDown()
-                        down.consume()
-                        pressed = true
-                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        arrow(code)
-                        val repeating = launch {
-                            delay(STICK_REPEAT_DELAY_MS)
-                            while (isActive) {
-                                arrow(code)
-                                delay(STICK_REPEAT_MS)
-                            }
-                        }
-                        try {
-                            while (true) {
-                                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                                change.consume()
-                                if (!change.pressed) break
-                            }
-                        } finally {
-                            repeating.cancel()
-                            pressed = false
-                        }
-                    }
-                }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Glyph(icon, if (pressed) Colors.accent else Colors.ink, size = 24.dp)
     }
 }
 
@@ -427,7 +357,10 @@ private fun StickFace(direction: String?, knob: Offset, deadZone: Float) {
     val edge = Colors.edge
     val lit = Colors.accent
     val ink = Colors.ink
-    Canvas(Modifier.size(STICK_FACE).floating()) {
+    val rise = remember { Animatable(0.6f) }
+    val riseSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+    LaunchedEffect(Unit) { rise.animateTo(1f, riseSpec) }
+    Canvas(Modifier.size(STICK_FACE).graphicsLayer { scaleX = rise.value; scaleY = rise.value }.floating()) {
         val r = size.minDimension / 2
         drawCircle(ring, r)
         if (direction != null) {
@@ -470,13 +403,11 @@ private val KEY_PAD = 2.dp
 private val STICK_FACE = 96.dp
 private val POPUP_EDGE = 12.dp
 
-/** The pinned pad's keys: larger than the bar's, since they are aimed at one after another. */
-private val PAD_KEY = 56.dp
-private val PAD_GAP = 6.dp
-private val PAD_INSET = 8.dp
-
 /** How far the finger moves before the stick points anywhere. */
 private val STICK_DEAD_ZONE = 14.dp
+
+/** How far the key's own mark follows the finger, inside the key. */
+private val STICK_KEY_TRAVEL = 10.dp
 
 /**
  * How far out the rim is, in dead zones: about 45 dp, well past where a slide that only means to

@@ -4,6 +4,7 @@ import android.graphics.Typeface
 import androidx.compose.runtime.Composable
 import com.android.tools.screenshot.PreviewTest
 import kotlinx.coroutines.flow.emptyFlow
+import me.leaver.rexpocket.core.ListedSession
 import me.leaver.rexpocket.core.PocketState
 
 @Composable
@@ -40,3 +41,16 @@ fun TerminalLive() = Term(Fixtures.live)
 @FormFactorPreviews
 @Composable
 fun TerminalTwoPanes() = Term(Fixtures.live.copy(activeSessionId = "s1", view = Fixtures.live.views["s1"]!!.copy(activeWindowId = "w2")))
+
+@PreviewTest
+@FormFactorPreviews
+@Composable
+fun TerminalManySessions() = Term(
+    Fixtures.live.copy(
+        sessions = Fixtures.live.sessions + listOf(
+            ListedSession("s3", "a-session-with-a-very-long-name"),
+            ListedSession("s4", "deploy"),
+            ListedSession("s5", "logs"),
+        ),
+    ),
+)

@@ -192,12 +192,6 @@ class HostStore(context: Context) {
         prefs.edit().putBoolean(KEY_LIVE_STATUS, on).apply()
     }
 
-    fun keyBarShift(): Boolean = prefs.getBoolean(KEY_KEY_BAR_SHIFT, false)
-
-    fun setKeyBarShift(on: Boolean) {
-        prefs.edit().putBoolean(KEY_KEY_BAR_SHIFT, on).apply()
-    }
-
     fun keyBarAlt(): Boolean = prefs.getBoolean(KEY_KEY_BAR_ALT, false)
 
     fun setKeyBarAlt(on: Boolean) {
@@ -252,7 +246,6 @@ class HostStore(context: Context) {
         private const val KEY_PURE_BLACK = "pure_black"
         private const val KEY_APP_FONT = "app_font"
         private const val KEY_LIVE_STATUS = "live_status"
-        private const val KEY_KEY_BAR_SHIFT = "keybar_shift"
         private const val KEY_KEY_BAR_ALT = "keybar_alt"
         private const val KEY_TAILSCALE_ENABLED = "tailscale_enabled"
         private const val KEY_TAILSCALE_HOSTNAME = "tailscale_hostname"

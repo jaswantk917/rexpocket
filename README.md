@@ -28,9 +28,10 @@ switched without leaving the terminal it was showing, and the dock is one hand's
 - **A real terminal.** The pane is drawn by Ghostty's emulator from Rex's own stream: a snapshot of
   the whole terminal first, then its output as it comes. Colours, scrollback and full-screen
   programs are exactly as on the desk.
-- **Made for the phone.** Typing goes straight into the pane. A floating dock holds the keyboard,
-  Return and a key row: `esc`, `C-c`, arrows that repeat while held, Tab, Return, `ctrl`, paste, a paperclip and `/`.
-  Settings → Terminal can show optional `Shift` and `Alt` keys; both are hidden by default. Hold
+- **Made for the phone.** Typing goes straight into the pane. Tap the terminal for the keyboard. A
+  floating dock holds a key row, `esc`, `C-c`, Tab, Return, `ctrl`, paste, a paperclip and `/`, and a
+  joystick for the arrows: press it and drag. Hold Tab for Shift+Tab. Settings → Terminal can show an
+  optional `Alt` key, hidden by default. Hold
   `ctrl` for `C-c` `C-d` `C-z` `C-r` `C-l` `C-a` `C-e` `C-w` `C-j`. A split shows one pane at a
   time, with a bar to move between them. **The keyboard never resizes the terminal** - the pane
   slides up under it by what it covers, so the line being typed into stays in view and a program in
@@ -100,8 +101,9 @@ reaches the server through the machine's own SSH daemon. How the transport works
      select, or long-press a link to open it.
    - Scroll the wide pill to reach more keys. Tap a modifier for the next key, twice quickly to
      lock it, and once again to release it. Hold Return for Shift+Enter. Hold `ctrl` and slide to
-     a chord. Locked Shift applies to all repeated arrows; one-shot Shift applies only to the first.
-   - Tap the title for the session's tabs and panes, and the list of sessions.
+     a chord.
+   - Scroll the chips under the pane and tap one to change session, tab or pane. The ⋮ menu lists
+     the session, its tab and its pane, each with its own rename and close.
    - Swipe left or right, or use the bar under the pane, to move between the panes of a split.
    - The menu holds Release / Take over, splitting, renaming and closing.
 5. **On the home screen,** the eye keeps only the tabs with a program working or waiting, and

@@ -83,9 +83,7 @@ internal class SettingsModel(
     val onAlerts: () -> Unit,
     val keyBar: Boolean,
     val onKeyBar: (Boolean) -> Unit,
-    val keyBarShift: Boolean,
     val keyBarAlt: Boolean,
-    val onKeyBarShift: (Boolean) -> Unit,
     val onKeyBarAlt: (Boolean) -> Unit,
     val liveStatus: Boolean,
     val onLiveStatus: (Boolean) -> Unit,
@@ -177,7 +175,6 @@ internal fun SettingsScreen(settings: SettingsModel, onBack: () -> Unit, showBac
             item(key = "terminal") {
                 Card(R.string.settings_group_terminal, 4, MaterialShapes.Cookie6Sided) {
                     LinkRow(R.drawable.ic_text, stringResource(R.string.terminal_font_title), settings.terminalFont, settings.onTerminalFont)
-                    SwitchRow(R.drawable.ic_shift, stringResource(R.string.keybar_shift), settings.keyBarShift, settings.onKeyBarShift)
                     SwitchRow(R.drawable.ic_keyboard, stringResource(R.string.keybar_alt), settings.keyBarAlt, settings.onKeyBarAlt)
                 }
             }

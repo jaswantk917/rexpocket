@@ -91,7 +91,6 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
     val tailnetPath by model.tailnetPath.collectAsState()
     val alerts by model.alerts.collectAsState()
     val liveStatus by model.liveStatus.collectAsState()
-    val keyBarShift by model.keyBarShift.collectAsState()
     val keyBarAlt by model.keyBarAlt.collectAsState()
     val keyBar by model.keyBar.collectAsState()
     // Held here, not in the terminal screen: going back to the list ends that screen, and a key bar
@@ -170,7 +169,6 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     keyBarWithKeyboard = keyBar,
                     keyBarChoice = keyBarChoice,
                     onKeyBarChoice = { keyBarChoice = it },
-                    keyBarShift = keyBarShift,
                     keyBarAlt = keyBarAlt,
                     state = pocket,
                     fontScale = font,
@@ -258,9 +256,7 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                                 onTailscale = { tailscaleOpen = true },
                                 alerts = alerts,
                                 onAlerts = model::setAlerts,
-                                keyBarShift = keyBarShift,
                                 keyBarAlt = keyBarAlt,
-                                onKeyBarShift = model::setKeyBarShift,
                                 onKeyBarAlt = model::setKeyBarAlt,
                                 liveStatus = liveStatus,
                                 onLiveStatus = model::setLiveStatus,

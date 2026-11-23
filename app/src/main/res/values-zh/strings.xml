@@ -98,7 +98,6 @@
     <string name="pane_no_picture">画面还没有来</string>
     <string name="key_escape">Esc</string>
     <string name="key_ctrl">Ctrl</string>
-    <string name="key_shift">Shift</string>
     <string name="key_alt">Alt</string>
     <string name="key_tab">Tab</string>
     <string name="key_ctrl_c">C-c</string>
@@ -193,8 +192,6 @@
         <item quantity="other">%1$d 个窗格</item>
     </plurals>
     <string name="key_arrows">方向键</string>
-    <string name="arrows_pinned">已固定</string>
-    <string name="key_keyboard">键盘</string>
     <string name="keybar_title">按键栏</string>
     <string name="keybar_auto">接键盘时隐藏</string>
     <string name="keybar_always">总是显示</string>
@@ -291,7 +288,6 @@
     <string name="session_new_on">在 %1$s 上新建会话</string>
     <string name="action_add_another_host">添加其他主机</string>
     <string name="filter_active">只看有活动的</string>
-    <string name="keybar_shift">显示 Shift 键</string>
     <string name="keybar_alt">显示 Alt 键</string>
     <string name="keybar_visible">显示</string>
     <string name="keybar_hidden">隐藏</string>

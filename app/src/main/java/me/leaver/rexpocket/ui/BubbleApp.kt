@@ -20,7 +20,6 @@ internal fun BubbleApp(model: RexViewModel, onGone: () -> Unit) {
     val typeface by model.terminalTypeface.collectAsState()
     val upload by model.upload.collectAsState()
     val keyBar by model.keyBar.collectAsState()
-    val keyBarShift by model.keyBarShift.collectAsState()
     val keyBarAlt by model.keyBarAlt.collectAsState()
     var keyBarChoice by rememberSaveable { mutableStateOf<Boolean?>(null) }
     var opened by remember { mutableStateOf(false) }
@@ -38,7 +37,6 @@ internal fun BubbleApp(model: RexViewModel, onGone: () -> Unit) {
             keyBarWithKeyboard = keyBar,
             keyBarChoice = keyBarChoice,
             onKeyBarChoice = { keyBarChoice = it },
-            keyBarShift = keyBarShift,
             keyBarAlt = keyBarAlt,
             state = pocket,
             fontScale = font,

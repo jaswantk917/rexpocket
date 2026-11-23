@@ -99,7 +99,6 @@
     <string name="pane_no_picture">No picture yet</string>
     <string name="key_escape">Esc</string>
     <string name="key_ctrl">Ctrl</string>
-    <string name="key_shift">Shift</string>
     <string name="key_alt">Alt</string>
     <string name="key_tab">Tab</string>
     <string name="key_ctrl_c">C-c</string>
@@ -196,8 +195,6 @@
         <item quantity="other">%1$d panes</item>
     </plurals>
     <string name="key_arrows">Arrow keys</string>
-    <string name="arrows_pinned">Pinned</string>
-    <string name="key_keyboard">Keyboard</string>
     <string name="keybar_title">Key bar</string>
     <string name="keybar_auto">Hidden with a keyboard</string>
     <string name="keybar_always">Always shown</string>
@@ -297,7 +294,6 @@
     <string name="action_add_another_host">Add another host</string>
     <string name="filter_active">Active only</string>
 
-    <string name="keybar_shift">Show Shift key</string>
     <string name="keybar_alt">Show Alt key</string>
     <string name="keybar_visible">Shown</string>
     <string name="keybar_hidden">Hidden</string>

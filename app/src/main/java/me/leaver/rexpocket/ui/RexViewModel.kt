@@ -191,7 +191,6 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
     val appearance = MutableStateFlow(store.appearance())
     val liveStatus = MutableStateFlow(store.liveStatus())
     private var inBubble = false
-    val keyBarShift = MutableStateFlow(store.keyBarShift())
     val keyBarAlt = MutableStateFlow(store.keyBarAlt())
     private val attention = AttentionLedger()
     var host: SavedHost? = null
@@ -281,11 +280,6 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
     fun setAppearance(value: Appearance) {
         store.setAppearance(value)
         appearance.value = value
-    }
-
-    fun setKeyBarShift(on: Boolean) {
-        store.setKeyBarShift(on)
-        keyBarShift.value = on
     }
 
     fun setKeyBarAlt(on: Boolean) {
