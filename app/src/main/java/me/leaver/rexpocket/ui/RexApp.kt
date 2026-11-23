@@ -10,6 +10,8 @@ import androidx.core.view.WindowCompat
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import me.leaver.rexpocket.R
+import me.leaver.rexpocket.alerts.Alerts
 import me.leaver.rexpocket.core.Trouble
 import me.leaver.rexpocket.data.SavedHost
 import androidx.compose.material3.AlertDialog
@@ -87,6 +90,7 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
     val opening by model.opening.collectAsState()
     val tailnetPath by model.tailnetPath.collectAsState()
     val alerts by model.alerts.collectAsState()
+    val liveStatus by model.liveStatus.collectAsState()
     val keyBarShift by model.keyBarShift.collectAsState()
     val keyBarAlt by model.keyBarAlt.collectAsState()
     val keyBar by model.keyBar.collectAsState()
@@ -184,6 +188,7 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     onDismissUpload = model::dismissUpload,
                     onRetryUpload = model::retryUpload,
                     onSettings = { settingsOpen = true },
+                    onBubble = if (Alerts.bubblesSupported) model::bubbleShownPane else null,
                 )
             }
             // Navigation 3: the host list is the list pane and the terminal the detail pane, side by
@@ -200,15 +205,26 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
             val twoPanes = directive.maxHorizontalPartitions > 1
             val strategy = rememberListDetailSceneStrategy<NavKey>(directive = directive)
             val slide = with(LocalDensity.current) { NAV_SLIDE.roundToPx() }
+            SharedTransitionLayout(Modifier.fillMaxSize()) {
+            val morph = remember(this) { PaneMorph(this) }
+            val sessionShown = pocket.activeSessionId
+            val tabShown = pocket.view?.activeWindowId
+            val morphing = { !twoPanes && morph.source != null }
+            CompositionLocalProvider(LocalPaneMorph provides morph.takeUnless { twoPanes }) {
             NavDisplay(
                 backStack = backStack,
                 onBack = { if (settingsOpen) settingsOpen = false else model.showHome() },
-                sceneStrategies = listOf(DialogSceneStrategy(), strategy),
-                transitionSpec = { navForward(slide) },
-                popTransitionSpec = { navBack(slide) },
-                predictivePopTransitionSpec = { navBack(slide) },
+                // One pane at a time gets a scene per screen, so the card can morph between them.
+                sceneStrategies = if (twoPanes) listOf(DialogSceneStrategy(), strategy) else listOf(DialogSceneStrategy()),
+                transitionSpec = { if (morphing()) morphHold() else navForward(slide) },
+                popTransitionSpec = { if (morphing()) morphHold() else navBack(slide) },
+                predictivePopTransitionSpec = { if (morphing()) morphHold() else navBack(slide) },
                 entryProvider = entryProvider {
                     entry<HostsKey>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { PaneCard { NoPaneOpen() } })) {
+                        // Read live: the collected values lag the tap that started the morph by a frame.
+                        AfterMorphLands(route, opening, morph.source) {
+                            if (model.route.value == Route.Home && model.opening.value == null) morph.clear()
+                        }
                         if (twoPanes) {
                             home(route == Route.Term)
                         } else {
@@ -219,8 +235,9 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                         }
                     }
                     entry<TerminalKey>(metadata = ListDetailSceneStrategy.detailPane()) {
+                        AfterMorphLands(sessionShown, tabShown, morph.source) { morph.follow(sessionShown, tabShown) }
                         // Beside the list there is no back button: the list is the way back.
-                        if (twoPanes) PaneCard { term(true) } else term(false)
+                        if (twoPanes) PaneCard { term(true) } else Box(Modifier.fillMaxSize().morphPage()) { term(false) }
                     }
                     entry<SettingsKey>(
                         // A dialog scene in every window, so what is under it stays composed: the
@@ -245,6 +262,8 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                                 keyBarAlt = keyBarAlt,
                                 onKeyBarShift = model::setKeyBarShift,
                                 onKeyBarAlt = model::setKeyBarAlt,
+                                liveStatus = liveStatus,
+                                onLiveStatus = model::setLiveStatus,
                                 keyBar = keyBar,
                                 onKeyBar = model::setKeyBar,
                                 onFontSettings = { fontSettingsOpen = true },
@@ -264,6 +283,8 @@ fun RexPocketApp(model: RexViewModel = viewModel()) {
                     }
                 },
             )
+            }
+            }
         }
         val offered = update
         val offeredTag = when (offered) {

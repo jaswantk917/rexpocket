@@ -19,6 +19,7 @@ import me.leaver.rexpocket.R
 import me.leaver.rexpocket.alerts.Alert
 import me.leaver.rexpocket.alerts.AlertTarget
 import me.leaver.rexpocket.alerts.Alerts
+import me.leaver.rexpocket.alerts.liveStatusOf
 import me.leaver.rexpocket.core.ListedSession
 import me.leaver.rexpocket.core.Phase
 import me.leaver.rexpocket.core.PocketSession
@@ -92,7 +93,7 @@ sealed interface Route {
 
 class RexViewModel(app: Application) : AndroidViewModel(app) {
     private val store = HostStore(app)
-    private val tailscaleBox = TailscaleBox(app)
+    private val tailscaleBox = TailscaleBox.shared(app)
     private val updater = Updater(app)
 
     /** The newer build the app found, from the check through to the downloaded APK. */
@@ -186,6 +187,8 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
     /** True when the key bar is kept on screen with a keyboard attached, which is not the default. */
     val keyBar = MutableStateFlow(store.keyBarAlways())
     val appearance = MutableStateFlow(store.appearance())
+    val liveStatus = MutableStateFlow(store.liveStatus())
+    private var inBubble = false
     val keyBarShift = MutableStateFlow(store.keyBarShift())
     val keyBarAlt = MutableStateFlow(store.keyBarAlt())
     private val attention = AttentionLedger()
@@ -215,6 +218,7 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
     }.also { it.start() }
 
     init {
+        liveModels.incrementAndGet()
         viewModelScope.launch {
             // Every font already on the phone, verified, so the picker can preview them offline.
             val saved = withContext(Dispatchers.IO) {
@@ -294,10 +298,11 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         network.stop()
-        Alerts.unwatch(getApplication())
+        if (!inBubble) Alerts.unwatch(getApplication())
         // The pane goes back to the desktop's size; viewModelScope is already cancelled here.
         disconnectQuiet()
-        tailscaleBox.stopAsync()
+        // A bubble can outlive the app's own screen, and they share the node.
+        if (liveModels.decrementAndGet() == 0) tailscaleBox.stopAsync()
         super.onCleared()
     }
 
@@ -369,7 +374,7 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
     fun connect(target: SavedHost, resume: Boolean = false) {
         disconnectQuiet()
         host = target
-        store.setLastHost(target.id)
+        if (!inBubble) store.setLastHost(target.id)
         val previousSession = store.lastSession(target.id)
         route.value = Route.Home
         val settings = store.tailscale()
@@ -393,7 +398,7 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
             endpointLabel = endpoint.label(),
             sessions = cached,
         )
-        if (Alerts.enabled.value) Alerts.watch(getApplication(), target.label)
+        if (Alerts.enabled.value && !inBubble) Alerts.watch(getApplication(), target.label)
         connectJob = viewModelScope.launch {
             // A host on the phone's own network is dialed directly, and the tailnet node stays as it
             // is: the home screen says the phone is in a tailnet, so that must not depend on which
@@ -483,6 +488,8 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun follow(s: PocketSession, hostId: String, resumeTo: String?) = coroutineScope {
         launch { s.state.collect { _pocket.value = it } }
+        // A bubble is a window onto one pane: what the app remembers and raises stays the app's.
+        if (inBubble) return@coroutineScope
         launch {
             s.state.mapNotNull { it.activeSessionId }.distinctUntilChanged()
                 .collect { store.setLastSession(hostId, it) }
@@ -530,12 +537,57 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun raiseAlerts(s: PocketSession, hostId: String) {
         val app = getApplication<Application>()
         combine(s.state, route) { st, r -> st to r }.collect { (st, r) ->
+            publishLive(st)
             val changes = attention.observe(st.blockStatus)
             changes.settled.forEach { Alerts.settle(app, it) }
             if (r == Route.Term && foreground) shownPane(st)?.let { (_, block) -> Alerts.settle(app, block) }
             if (foreground || !Alerts.enabled.value) return@collect
             for (block in changes.raised) alertFor(app, st, hostId, block)?.let { Alerts.raise(app, it) }
         }
+    }
+
+    /** The ongoing notification says what is running while the app is away, and nothing on screen. */
+    private fun publishLive(st: PocketState = _pocket.value) {
+        if (inBubble || !Alerts.enabled.value) return
+        val label = host?.label ?: return
+        val status = if (foreground || !liveStatus.value) null else liveStatusOf(st.blockStatus) { block -> liveName(st, block) }
+        Alerts.live(getApplication(), label, status)
+    }
+
+    private fun liveName(st: PocketState, block: String): String? {
+        val view = st.views.values.firstOrNull { v -> v.allBlocks().any { it.id == block } } ?: return null
+        return paneTitle(view.allBlocks().first { it.id == block }, st.blockStatus[block], st.programs[block])
+    }
+
+    fun setLiveStatus(on: Boolean) {
+        store.setLiveStatus(on)
+        liveStatus.value = on
+        publishLive()
+    }
+
+    /** Puts the pane on screen in a bubble of its own, or sends the person to allow bubbles first. */
+    fun bubbleShownPane() {
+        val app = getApplication<Application>()
+        val saved = host ?: return
+        val st = _pocket.value
+        val (sessionId, block) = shownPane(st) ?: return
+        val view = st.views[sessionId] ?: st.view ?: return
+        val info = view.allBlocks().firstOrNull { it.id == block } ?: return
+        if (!Alerts.bubblesAllowed(app)) {
+            Alerts.openBubbleSettings(app)
+            return
+        }
+        val record = st.blockStatus[block]
+        val text = record?.msg?.takeIf { it.isNotBlank() } ?: record?.let { statusWordRes(it) }?.let { app.getString(it) } ?: view.label
+        Alerts.bubble(app, Alert(AlertTarget(saved.id, sessionId, block), "${paneTitle(info, record, st.programs[block])} · ${view.label}", text, saved.label), expand = true)
+    }
+
+    /** Makes this model a bubble's: it shows [target] alone and leaves the app's memory alone. */
+    fun openBubble(target: AlertTarget) {
+        val saved = store.find(target.hostId) ?: return
+        inBubble = true
+        connect(saved)
+        enterSession(Opening.Existing(target.sessionId)) { openSession(target.sessionId, target.blockId) }
     }
 
     private fun alertFor(app: Application, st: PocketState, hostId: String, block: String): Alert? {
@@ -739,6 +791,7 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
         foreground = visible
         if (returning && host?.viaTailscale == true) viewModelScope.launch(Dispatchers.IO) { tailscaleBox.resetNetwork() }
         session?.setActive(visible)
+        publishLive()
     }
 
     /**
@@ -1002,6 +1055,9 @@ private fun SavedHost.endpoint(): Endpoint = Endpoint(host, port, plaintext, ssh
  * round trip with a time limit, so nothing here outlives the process by more than that.
  */
 private val teardown = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+/** The view models alive in this process: the app's and one per open bubble. */
+private val liveModels = java.util.concurrent.atomic.AtomicInteger()
 
 /** How long after a connection goes live the path is measured: Tailscale needs a moment to go direct. */
 private const val PATH_SETTLE_MS = 3_000L

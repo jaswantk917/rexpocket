@@ -185,6 +185,13 @@ class HostStore(context: Context) {
             .apply()
     }
 
+    /** Whether the ongoing notification says what is running while the app is away. */
+    fun liveStatus(): Boolean = prefs.getBoolean(KEY_LIVE_STATUS, true)
+
+    fun setLiveStatus(on: Boolean) {
+        prefs.edit().putBoolean(KEY_LIVE_STATUS, on).apply()
+    }
+
     fun keyBarShift(): Boolean = prefs.getBoolean(KEY_KEY_BAR_SHIFT, false)
 
     fun setKeyBarShift(on: Boolean) {
@@ -244,6 +251,7 @@ class HostStore(context: Context) {
         private const val KEY_SCHEME = "color_scheme"
         private const val KEY_PURE_BLACK = "pure_black"
         private const val KEY_APP_FONT = "app_font"
+        private const val KEY_LIVE_STATUS = "live_status"
         private const val KEY_KEY_BAR_SHIFT = "keybar_shift"
         private const val KEY_KEY_BAR_ALT = "keybar_alt"
         private const val KEY_TAILSCALE_ENABLED = "tailscale_enabled"

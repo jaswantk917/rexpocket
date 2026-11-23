@@ -87,6 +87,8 @@ internal class SettingsModel(
     val keyBarAlt: Boolean,
     val onKeyBarShift: (Boolean) -> Unit,
     val onKeyBarAlt: (Boolean) -> Unit,
+    val liveStatus: Boolean,
+    val onLiveStatus: (Boolean) -> Unit,
     val terminalFont: String,
     val onTerminalFont: () -> Unit,
     val recording: Boolean,
@@ -182,6 +184,10 @@ internal fun SettingsScreen(settings: SettingsModel, onBack: () -> Unit, showBac
             item(key = "connection") {
                 Card(R.string.settings_group_connection, 1, MaterialShapes.Clover8Leaf) {
                     LinkRow(R.drawable.ic_tailnet, stringResource(R.string.tailscale_title), settings.tailnet, settings.onTailscale)
+                    // It is the alerts' ongoing notification, so it exists only while they are on.
+                    if (settings.alerts) {
+                        SwitchRow(R.drawable.ic_notifications, stringResource(R.string.live_setting), settings.liveStatus, settings.onLiveStatus)
+                    }
                 }
             }
             item(key = "version") {

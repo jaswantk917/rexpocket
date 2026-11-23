@@ -42,7 +42,8 @@ switched without leaving the terminal it was showing, and the dock is one hand's
   Rex stores it on the computer and types its path itself, so a screenshot can go straight into an
   agent's prompt.
 - **Background alerts.** Optional: the app stays connected while it is away and notifies you when a
-  program waits for approval, an answer or a login, or fails. Tap the alert to open that pane.
+  program waits for approval, an answer or a login, or fails. Tap the alert to open that pane. Each alert is an Android conversation and can open as a
+  bubble, and on Android 16 or later running panes show as a live update.
 - **Works beside the desk.** The phone holds only the pane it shows and sizes it to the phone; the
   desktop keeps its own tab. **Release** hands a pane back to the desk until you **Take over**.
 - **Your tailnet, without the Tailscale app.** The app runs its own Tailscale node, so a host is

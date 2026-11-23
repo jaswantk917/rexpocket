@@ -177,7 +177,9 @@ internal fun TermScreen(
     keyBarAlt: Boolean = false,
     /** True when this pane shares the window with the list, which is then the way back. */
     embedded: Boolean = false,
-    onSettings: () -> Unit = {},
+    onSettings: (() -> Unit)? = null,
+    /** Puts this pane in a bubble; null where bubbles are not offered, and inside one. */
+    onBubble: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val ime = LocalSoftwareKeyboardController.current
@@ -381,7 +383,12 @@ internal fun TermScreen(
             } else {
                 MenuItem(stringResource(R.string.key_row_show), R.drawable.ic_keyboard) { dismiss(); onKeyBarChoice(true) }
             }
-            MenuItem(stringResource(R.string.settings), R.drawable.ic_settings) { dismiss(); onSettings() }
+            onBubble?.let { bubble ->
+                MenuItem(stringResource(R.string.menu_bubble), R.drawable.ic_bubble) { dismiss(); bubble() }
+            }
+            onSettings?.let { open ->
+                MenuItem(stringResource(R.string.settings), R.drawable.ic_settings) { dismiss(); open() }
+            }
         }
     }
 

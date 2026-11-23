@@ -51,7 +51,7 @@ const val LOG_TAG = "RexPocketTS"
  * and only the sockets this app opens for Rex go through the tunnel. That is why the Tailscale app
  * does not have to run, and why this composes with whatever VPN the phone already uses.
  */
-class TailscaleBox(private val context: Context) {
+class TailscaleBox private constructor(private val context: Context) {
     /**
      * Whether the node's own UDP sockets skip a VPN on the phone and use the network under it. On
      * by default: a proxy VPN turns every direct path into a DERP relay. Read for every socket.
@@ -353,6 +353,13 @@ class TailscaleBox(private val context: Context) {
     }
 
     companion object {
+        @Volatile private var instance: TailscaleBox? = null
+
+        /** One node per process: the app and any bubbles open beside it dial through the same one. */
+        fun shared(context: Context): TailscaleBox = instance ?: synchronized(this) {
+            instance ?: TailscaleBox(context.applicationContext).also { instance = it }
+        }
+
         private const val DEFAULT_MTU = 1500
 
         /** Pings in one probe: the direct path usually takes a second or two to be found. */

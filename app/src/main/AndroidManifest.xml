@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Android 16: the running panes as a live update in the status bar. -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <application
         android:allowBackup="true"
         android:enableOnBackInvokedCallback="true"
@@ -28,6 +30,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- One pane in a bubble; Android requires these three attributes of a bubble's activity. -->
+        <activity
+            android:name=".BubbleActivity"
+            android:allowEmbedded="true"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
+            android:documentLaunchMode="always"
+            android:exported="false"
+            android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize" />
+        <receiver
+            android:name=".alerts.BubbleReceiver"
+            android:exported="false" />
         <!-- The diagnostics report is written to the cache and handed out one file at a time. -->
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -42,7 +56,7 @@
             android:name=".alerts.WatchService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
-            android:stopWithTask="true">
+            android:stopWithTask="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the connection to the user's own Rex terminal server open while the app is in the background, to notify when a program in a terminal is waiting for the user." />

@@ -295,4 +295,12 @@
     <string name="keybar_alt">显示 Alt 键</string>
     <string name="keybar_visible">显示</string>
     <string name="keybar_hidden">隐藏</string>
+    <string name="menu_bubble">以气泡打开</string>
+    <string name="bubble_allow">请允许 Rex 使用气泡，然后再选一次“以气泡打开”。</string>
+    <string name="alerts_you">你</string>
+    <string name="alerts_channel_live">实时状态</string>
+    <string name="alerts_channel_live_body">Rex 在后台时各窗格正在做什么</string>
+    <string name="live_setting">后台时显示实时状态</string>
+    <string name="live_chip_working">%1$d 运行</string>
+    <string name="live_chip_waiting">%1$d 等待</string>
 </resources>

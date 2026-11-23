@@ -9,7 +9,8 @@ import androidx.compose.ui.graphics.blur.BlurStop
 import androidx.compose.ui.graphics.blur.BlurRadiusSpec
 import androidx.compose.ui.draw.blur
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.MediumExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.SmallExtendedFloatingActionButton
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.ui.semantics.contentDescription
@@ -294,8 +295,8 @@ internal fun HomeScreen(
         }
         val list = rememberLazyListState()
         val bar = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-        // The toolbar folds down to its button while the list is read downwards, as Orion's dock does.
-        val toolbarOpen by remember { derivedStateOf { !list.canScrollBackward || list.lastScrolledBackward } }
+        // The button says its name only at the top of the list; anywhere else it is just a plus.
+        val toolbarOpen by remember { derivedStateOf { !list.canScrollBackward } }
         // What needs a look, across every tab the phone knows of; the host count when nothing does.
         val working = state.blockStatus.values.count { it.state == "working" }
         val waiting = state.blockStatus.values.count { it.state == "blocked" }
@@ -501,6 +502,7 @@ internal fun HomeScreen(
                                             opening = openingThis,
                                             expanded = sessionExpanded,
                                             joined = showTabs,
+                                            opens = row.view == null,
                                             onToggle = {
                                                 if (row.view == null) {
                                                     onOpenSession(host, row.session.id)
@@ -540,6 +542,7 @@ internal fun HomeScreen(
                                                     opening = openingThis,
                                                     open = tab.id == onScreen,
                                                     shape = segmentShape(index + 1, row.tabs.size + 1),
+                                                    morphKey = tabMorphKey(row.session.id, tab.id),
                                                     onOpen = { onOpenTab(host, row.session.id, tab.id) },
                                                 )
                                             }
@@ -555,10 +558,11 @@ internal fun HomeScreen(
                     }
                     if (!searchOpen && !activeOnly) {
                         item(key = "add-host") {
-                            OutlinedButton(
+                            // Held to the left, so the floating button at the right never covers it.
+                            TextButton(
                                 onClick = { creating = true },
                                 shapes = ButtonDefaults.shapes(),
-                                modifier = Modifier.animateItem().fillMaxWidth().padding(top = 8.dp).heightIn(min = 56.dp),
+                                modifier = Modifier.animateItem().padding(top = 4.dp).heightIn(min = 48.dp),
                             ) {
                                 Glyph(R.drawable.ic_host, MaterialTheme.colorScheme.primary, size = 20.dp)
                                 Spacer(Modifier.width(10.dp))
@@ -568,19 +572,27 @@ internal fun HomeScreen(
                     }
                 }
                 if (!searchOpen && !detail) {
-                    // The one thing this screen starts: a session. It folds to its icon while the list
-                    // is read downwards and opens again on the way back up.
+                    // The one thing this screen starts, kept quiet: a tonal button that folds to its
+                    // plus as soon as the list moves, and grows into the new session's terminal.
                     val addLabel = stringResource(R.string.session_new_on, (connected ?: hosts.first()).label)
+                    val fabShape = RoundedCornerShape(16.dp)
+                    val morph = LocalPaneMorph.current
                     Box(Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 16.dp)) {
                         Tip(addLabel) {
-                        MediumExtendedFloatingActionButton(
-                            text = { Text(stringResource(R.string.session_new)) },
-                            icon = { Glyph(R.drawable.ic_add, MaterialTheme.colorScheme.onTertiaryContainer) },
-                            onClick = { onNewSession(connected ?: hosts.first()) },
-                            expanded = toolbarOpen,
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            modifier = Modifier.semantics { contentDescription = addLabel },
-                        )
+                            SmallExtendedFloatingActionButton(
+                                text = { Text(stringResource(R.string.session_new)) },
+                                icon = { Glyph(R.drawable.ic_add, MaterialTheme.colorScheme.onSecondaryContainer) },
+                                onClick = {
+                                    morph?.start(NEW_SESSION_MORPH, fabShape)
+                                    onNewSession(connected ?: hosts.first())
+                                },
+                                expanded = toolbarOpen,
+                                shape = fabShape,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                elevation = FloatingActionButtonDefaults.loweredElevation(),
+                                modifier = Modifier.morphCard(NEW_SESSION_MORPH, fabShape).semantics { contentDescription = addLabel },
+                            )
                         }
                     }
                 }
@@ -630,6 +642,8 @@ internal fun Settings(
     keyBarAlt: Boolean,
     onKeyBarShift: (Boolean) -> Unit,
     onKeyBarAlt: (Boolean) -> Unit,
+    liveStatus: Boolean,
+    onLiveStatus: (Boolean) -> Unit,
     keyBar: Boolean,
     onKeyBar: (Boolean) -> Unit,
     onFontSettings: () -> Unit,
@@ -682,6 +696,8 @@ internal fun Settings(
             keyBarAlt = keyBarAlt,
             onKeyBarShift = onKeyBarShift,
             onKeyBarAlt = onKeyBarAlt,
+            liveStatus = liveStatus,
+            onLiveStatus = onLiveStatus,
             keyBar = keyBar,
             onKeyBar = onKeyBar,
             terminalFont = fontName,
@@ -869,8 +885,15 @@ private fun AttentionCard(session: String, sessionId: String, tab: TabItem, modi
     val tint = rememberTint(sessionId)
     val waiting = tab.activity?.state == "blocked"
     val shape = RoundedCornerShape(28.dp)
+    val morph = LocalPaneMorph.current
+    val morphKey = shelfMorphKey(sessionId, tab.id)
     Column(
-        modifier.width(168.dp).pressable(shape, onClick = onOpen).background(tint.container).padding(16.dp),
+        modifier.width(168.dp).morphCard(morphKey, shape)
+            .pressable(shape, onClick = {
+                morph?.start(morphKey, shape)
+                onOpen()
+            })
+            .background(tint.container).padding(16.dp),
     ) {
         Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
             // It turns while the agent works and rests while it waits for you.
@@ -996,9 +1019,13 @@ private fun SessionHeader(
     opening: Boolean,
     expanded: Boolean,
     joined: Boolean,
+    /** True when a tap opens the session rather than folding it. */
+    opens: Boolean,
     onToggle: () -> Unit,
     onNewTab: () -> Unit,
 ) {
+    val morph = LocalPaneMorph.current
+    val morphKey = sessionMorphKey(row.session.id)
     val tint = rememberTint(row.session.id)
     val tabs = row.view?.windows?.size ?: 0
     val detail = when {
@@ -1008,7 +1035,14 @@ private fun SessionHeader(
         else -> null
     }
     val shape = if (joined) segmentShape(0, 2) else RoundedCornerShape(SEGMENT_OUTER)
-    Box(Modifier.fillMaxWidth().pressable(shape, onClick = onToggle).background(tint.container)) {
+    Box(
+        Modifier.fillMaxWidth().morphCard(morphKey, shape)
+            .pressable(shape, onClick = {
+                if (opens) morph?.start(morphKey, shape)
+                onToggle()
+            })
+            .background(tint.container),
+    ) {
         Box(Modifier.matchParentSize()) {
             // Still, at an angle of its own: a list of turning shapes would never stop drawing.
             StillOrnament(MaterialShapes.Sunny, tint.ornament, 120.dp, Modifier.align(Alignment.CenterEnd).offset(x = 36.dp), angle = (row.session.id.hashCode() % 45).toFloat())
@@ -1058,14 +1092,20 @@ private fun TabRow(
     /** True for the tab the pane beside the list is showing. */
     open: Boolean,
     shape: RoundedCornerShape,
+    morphKey: String,
     onOpen: () -> Unit,
 ) {
+    val morph = LocalPaneMorph.current
     val selected = stringResource(R.string.state_selected)
     val fill by animateColorAsState(if (open) tint.container else tint.surface, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "tab")
     val edge by animateDpAsState(if (open) 4.dp else 0.dp, MaterialTheme.motionScheme.fastSpatialSpec(), label = "tab-edge")
     Row(
-        Modifier.fillMaxWidth().height(IntrinsicSize.Min).heightIn(min = 64.dp)
-            .pressable(shape, enabled = !opening, onClick = onOpen).background(fill)
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min).heightIn(min = 64.dp).morphCard(morphKey, shape)
+            .pressable(shape, enabled = !opening, onClick = {
+                morph?.start(morphKey, shape)
+                onOpen()
+            })
+            .background(fill)
             .semantics { if (open) stateDescription = selected },
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -301,4 +301,12 @@
     <string name="keybar_alt">Show Alt key</string>
     <string name="keybar_visible">Shown</string>
     <string name="keybar_hidden">Hidden</string>
+    <string name="menu_bubble">Open as bubble</string>
+    <string name="bubble_allow">Allow bubbles for Rex, then choose Open as bubble again.</string>
+    <string name="alerts_you">You</string>
+    <string name="alerts_channel_live">Live status</string>
+    <string name="alerts_channel_live_body">What your panes are doing while Rex is away</string>
+    <string name="live_setting">Live status while away</string>
+    <string name="live_chip_working">%1$d live</string>
+    <string name="live_chip_waiting">%1$d wait</string>
 </resources>
