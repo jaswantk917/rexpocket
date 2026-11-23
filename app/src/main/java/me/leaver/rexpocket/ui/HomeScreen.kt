@@ -25,7 +25,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.foundation.layout.FlowRow
-import me.leaver.rexpocket.data.TERMINAL_FAMILIES
+import me.leaver.rexpocket.data.FontCatalog
 import me.leaver.rexpocket.data.TerminalFontState
 import me.leaver.rexpocket.data.Appearance
 import androidx.compose.animation.AnimatedContent
@@ -626,6 +626,10 @@ internal fun Settings(
     onTailscale: () -> Unit,
     alerts: Boolean,
     onAlerts: (Boolean) -> Unit,
+    keyBarShift: Boolean,
+    keyBarAlt: Boolean,
+    onKeyBarShift: (Boolean) -> Unit,
+    onKeyBarAlt: (Boolean) -> Unit,
     keyBar: Boolean,
     onKeyBar: (Boolean) -> Unit,
     onFontSettings: () -> Unit,
@@ -664,8 +668,7 @@ internal fun Settings(
         tailscale.enabled -> tailnetState(tailscaleStatus)
         else -> stringResource(R.string.tailscale_not_joined)
     }
-    val fontName = terminalFont.selected?.let { id -> TERMINAL_FAMILIES.firstOrNull { it.id == id }?.label }
-        ?: stringResource(R.string.terminal_font_system)
+    val fontName = FontCatalog.find(terminalFont.selected)?.name ?: stringResource(R.string.terminal_font_system)
 
     SettingsScreen(
         SettingsModel(
@@ -675,6 +678,10 @@ internal fun Settings(
             onTailscale = onTailscale,
             alerts = alerts,
             onAlerts = toggleAlerts,
+            keyBarShift = keyBarShift,
+            keyBarAlt = keyBarAlt,
+            onKeyBarShift = onKeyBarShift,
+            onKeyBarAlt = onKeyBarAlt,
             keyBar = keyBar,
             onKeyBar = onKeyBar,
             terminalFont = fontName,

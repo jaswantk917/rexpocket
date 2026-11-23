@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -26,13 +27,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.leaver.rexpocket.R
-import me.leaver.rexpocket.data.TERMINAL_FAMILIES
+import me.leaver.rexpocket.data.FontCatalog
+import me.leaver.rexpocket.data.SYSTEM_FONT
 import me.leaver.rexpocket.data.TerminalFontState
-import me.leaver.rexpocket.data.terminalFamily
 
 /** The terminal's font: the system's monospace, or one of the families downloaded on demand. */
 @Composable
-internal fun FontSettingsDialog(state: TerminalFontState, onSelect: (String?) -> Unit, onDismiss: () -> Unit) {
+internal fun FontSettingsDialog(state: TerminalFontState, typeface: Typeface, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
     val enabled = !state.initializing && state.downloading == null
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -40,26 +41,32 @@ internal fun FontSettingsDialog(state: TerminalFontState, onSelect: (String?) ->
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(stringResource(R.string.terminal_font_hint))
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Aa 0O 1l {} [] →\n\uE0B0 \uF07B \uE718 \uDB80\uDE4B",
+                    fontFamily = FontFamily(typeface),
+                )
                 FontOption(
                     title = stringResource(R.string.terminal_font_system),
                     detail = stringResource(R.string.terminal_font_system_detail),
                     preview = FontFamily.Monospace,
-                    selected = state.selected == null,
+                    selected = state.selected == SYSTEM_FONT,
                     enabled = enabled,
-                ) { onSelect(null) }
-                TERMINAL_FAMILIES.forEach { family ->
+                ) { onSelect(SYSTEM_FONT) }
+                FontCatalog.fonts.forEach { family ->
                     val face = state.available[family.id]
                     val status = when {
                         state.downloading == family.id -> stringResource(R.string.terminal_font_downloading, (state.progress * 100).toInt())
                         face != null -> stringResource(R.string.terminal_font_saved)
-                        else -> stringResource(R.string.terminal_font_download, family.size)
+                        else -> stringResource(R.string.terminal_font_download, "${family.downloadMb} MB")
                     }
                     val note = if (family.id == "meslo") stringResource(R.string.terminal_font_meslo_detail) else null
                     FontOption(
-                        title = family.label,
+                        title = family.name,
                         detail = listOfNotNull(note, status).joinToString(" · "),
                         // A family is previewed in its own face once it is on the phone.
                         preview = face?.let { remember(it) { FontFamily(it) } },
+                        icons = family.nerd,
                         selected = state.selected == family.id,
                         enabled = enabled,
                     ) { onSelect(family.id) }
@@ -69,7 +76,7 @@ internal fun FontSettingsDialog(state: TerminalFontState, onSelect: (String?) ->
                 }
                 if (state.initializing) Text(stringResource(R.string.terminal_font_loading))
                 state.failed?.let { id ->
-                    Text(stringResource(R.string.terminal_font_failed, terminalFamily(id)?.label.orEmpty()), color = Colors.danger)
+                    Text(stringResource(R.string.terminal_font_failed, FontCatalog.find(id)?.name.orEmpty()), color = Colors.danger)
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(stringResource(R.string.terminal_font_credit), style = MaterialTheme.typography.bodySmall)
@@ -84,6 +91,7 @@ private fun FontOption(
     title: String,
     detail: String,
     preview: FontFamily?,
+    icons: Boolean = false,
     selected: Boolean,
     enabled: Boolean,
     onSelect: () -> Unit,
@@ -97,7 +105,7 @@ private fun FontOption(
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
             Text(title)
             if (preview != null) {
-                Text(PREVIEW, fontFamily = preview, maxLines = 1, overflow = TextOverflow.Clip, color = Colors.muted)
+                Text(if (icons) "$PREVIEW $NERD_PREVIEW" else PREVIEW, fontFamily = preview, maxLines = 1, overflow = TextOverflow.Clip, color = Colors.muted)
             }
             Text(detail, style = MaterialTheme.typography.bodySmall)
         }
@@ -106,3 +114,6 @@ private fun FontOption(
 
 /** Characters that tell monospace faces apart: zero and O, one, l and I, braces, and an arrow. */
 private const val PREVIEW = "0O 1lI {} [] => ~/src \$ git"
+
+/** A prompt arrow, a folder, a branch and a file type: the icons a Nerd Font adds. */
+private const val NERD_PREVIEW = "\uE0B0 \uF07B \uE0A0 \uE718"

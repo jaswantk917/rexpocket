@@ -83,6 +83,10 @@ internal class SettingsModel(
     val onAlerts: () -> Unit,
     val keyBar: Boolean,
     val onKeyBar: (Boolean) -> Unit,
+    val keyBarShift: Boolean,
+    val keyBarAlt: Boolean,
+    val onKeyBarShift: (Boolean) -> Unit,
+    val onKeyBarAlt: (Boolean) -> Unit,
     val terminalFont: String,
     val onTerminalFont: () -> Unit,
     val recording: Boolean,
@@ -171,6 +175,8 @@ internal fun SettingsScreen(settings: SettingsModel, onBack: () -> Unit, showBac
             item(key = "terminal") {
                 Card(R.string.settings_group_terminal, 4, MaterialShapes.Cookie6Sided) {
                     LinkRow(R.drawable.ic_text, stringResource(R.string.terminal_font_title), settings.terminalFont, settings.onTerminalFont)
+                    SwitchRow(R.drawable.ic_shift, stringResource(R.string.keybar_shift), settings.keyBarShift, settings.onKeyBarShift)
+                    SwitchRow(R.drawable.ic_keyboard, stringResource(R.string.keybar_alt), settings.keyBarAlt, settings.onKeyBarAlt)
                 }
             }
             item(key = "connection") {
@@ -312,6 +318,26 @@ private fun LinkRow(@DrawableRes icon: Int, title: String, value: String, onClic
             )
         }
         Glyph(R.drawable.ic_chevron_right, (tint?.onContainer ?: MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.7f), size = 20.dp)
+    }
+}
+
+@Composable
+private fun SwitchRow(@DrawableRes icon: Int, title: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    val view = LocalView.current
+    val toggle = {
+        Haptics.toggle(view, !on)
+        onChange(!on)
+    }
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = ROW_MIN)
+            .pressable(RoundedCornerShape(4.dp), role = Role.Switch, onClick = toggle).background(rowFill())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RowTile(icon)
+        Spacer(Modifier.width(16.dp))
+        RowText(title, null, Modifier.weight(1f))
+        Switch(checked = on, onCheckedChange = null)
     }
 }
 

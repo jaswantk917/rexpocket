@@ -185,17 +185,29 @@ class HostStore(context: Context) {
             .apply()
     }
 
+    fun keyBarShift(): Boolean = prefs.getBoolean(KEY_KEY_BAR_SHIFT, false)
+
+    fun setKeyBarShift(on: Boolean) {
+        prefs.edit().putBoolean(KEY_KEY_BAR_SHIFT, on).apply()
+    }
+
+    fun keyBarAlt(): Boolean = prefs.getBoolean(KEY_KEY_BAR_ALT, false)
+
+    fun setKeyBarAlt(on: Boolean) {
+        prefs.edit().putBoolean(KEY_KEY_BAR_ALT, on).apply()
+    }
+
     fun fontScale(): Float = prefs.getFloat(KEY_FONT, 1f)
 
-    /**
-     * The terminal family the person chose, or null for the system's monospace. A phone that chose
-     * the one downloadable font of the first version ("downloaded_font") keeps JetBrains Mono.
-     */
-    fun terminalFont(): String? = prefs.getString("terminal_font", null)
-        ?: "jetbrains".takeIf { prefs.getBoolean("downloaded_font", false) }
+    fun terminalFont(): String = when (val saved = prefs.getString("terminal_font", null)) {
+        null -> if (prefs.getBoolean("downloaded_font", false)) "jetbrains-mono" else SYSTEM_FONT
+        // This fork's id for JetBrains Mono before it took upstream's catalog.
+        "jetbrains" -> "jetbrains-mono"
+        else -> saved
+    }
 
-    fun setTerminalFont(id: String?) {
-        prefs.edit().putString("terminal_font", id).remove("downloaded_font").apply()
+    fun setTerminalFont(id: String) {
+        prefs.edit().putString("terminal_font", id).apply()
     }
 
     fun setFontScale(scale: Float) {
@@ -232,6 +244,8 @@ class HostStore(context: Context) {
         private const val KEY_SCHEME = "color_scheme"
         private const val KEY_PURE_BLACK = "pure_black"
         private const val KEY_APP_FONT = "app_font"
+        private const val KEY_KEY_BAR_SHIFT = "keybar_shift"
+        private const val KEY_KEY_BAR_ALT = "keybar_alt"
         private const val KEY_TAILSCALE_ENABLED = "tailscale_enabled"
         private const val KEY_TAILSCALE_HOSTNAME = "tailscale_hostname"
         fun newId(): String = UUID.randomUUID().toString()

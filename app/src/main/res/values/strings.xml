@@ -99,6 +99,8 @@
     <string name="pane_no_picture">No picture yet</string>
     <string name="key_escape">Esc</string>
     <string name="key_ctrl">Ctrl</string>
+    <string name="key_shift">Shift</string>
+    <string name="key_alt">Alt</string>
     <string name="key_tab">Tab</string>
     <string name="key_ctrl_c">C-c</string>
     <string name="key_paste">Paste</string>
@@ -294,4 +296,9 @@
     <string name="session_new_on">New session on %1$s</string>
     <string name="action_add_another_host">Add another host</string>
     <string name="filter_active">Active only</string>
+
+    <string name="keybar_shift">Show Shift key</string>
+    <string name="keybar_alt">Show Alt key</string>
+    <string name="keybar_visible">Shown</string>
+    <string name="keybar_hidden">Hidden</string>
 </resources>

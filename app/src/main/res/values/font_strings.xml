@@ -8,6 +8,6 @@
     <string name="terminal_font_loading">Loading saved fonts…</string>
     <string name="terminal_font_downloading">Downloading… %1$d%%</string>
     <string name="terminal_font_failed">Could not download or load %1$s. Your font has not changed; tap it to retry.</string>
-    <string name="terminal_font_credit">JetBrains Mono, IBM Plex Mono and Source Code Pro: SIL Open Font License 1.1 · Hack: MIT and Bitstream Vera licences · Ubuntu Mono: Ubuntu Font Licence 1.0 · Meslo: Apache License 2.0</string>
+    <string name="terminal_font_credit">JetBrains Mono, IBM Plex Mono and Source Code Pro: SIL Open Font License 1.1 · Hack: MIT and Bitstream Vera licences · Ubuntu Mono: Ubuntu Font Licence 1.0 · Meslo: Apache License 2.0 · Fira Code: SIL Open Font License 1.1 · Nerd Fonts icons: MIT and their sources\' licences</string>
     <string name="terminal_font_meslo_detail">Menlo’s open-source twin, with Nerd Font icons</string>
 </resources>

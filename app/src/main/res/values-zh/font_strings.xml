@@ -8,6 +8,6 @@
     <string name="terminal_font_loading">正在加载已保存字体…</string>
     <string name="terminal_font_downloading">正在下载… %1$d%%</string>
     <string name="terminal_font_failed">%1$s 下载或加载失败，当前字体未改变。点击它重试。</string>
-    <string name="terminal_font_credit">JetBrains Mono、IBM Plex Mono、Source Code Pro：SIL 开放字体许可证 1.1 · Hack：MIT 与 Bitstream Vera 许可证 · Ubuntu Mono：Ubuntu 字体许可证 1.0 · Meslo：Apache 许可证 2.0</string>
+    <string name="terminal_font_credit">JetBrains Mono、IBM Plex Mono、Source Code Pro：SIL 开放字体许可证 1.1 · Hack：MIT 与 Bitstream Vera 许可证 · Ubuntu Mono：Ubuntu 字体许可证 1.0 · Meslo：Apache 许可证 2.0 · Fira Code：SIL 开放字体许可证 1.1 · Nerd Fonts 图标：MIT 及其来源的许可证</string>
     <string name="terminal_font_meslo_detail">Menlo 的开源孪生字体，含 Nerd Font 图标</string>
 </resources>

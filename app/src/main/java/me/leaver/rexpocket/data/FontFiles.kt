@@ -5,12 +5,18 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-internal data class FontAsset(val name: String, val sha256: String)
+internal data class FontAsset(
+    val name: String,
+    val sha256: String,
+    val folder: String = "",
+    val weight: Int = 400,
+    val italic: Boolean = false,
+)
 
 /** Installs a complete verified family; incomplete downloads never become the active font. */
-internal class FontFiles(private val root: File, private val family: TerminalFamily) {
-    private val assets = family.assets
-    val directory = File(root, family.directory)
+internal class FontFiles(private val root: File, private val font: TerminalFont) {
+    private val assets = font.assets
+    val directory = File(root, font.cacheKey)
 
     fun available(): Boolean = assets.all { matches(File(directory, it.name), it.sha256) }
 
@@ -20,7 +26,7 @@ internal class FontFiles(private val root: File, private val family: TerminalFam
     ): File {
         if (available()) return directory
         check(root.isDirectory || root.mkdirs())
-        val staging = File(root, "${family.directory}.partial")
+        val staging = File(root, "${font.cacheKey}.partial")
         staging.deleteRecursively()
         check(staging.mkdirs())
         try {
@@ -39,7 +45,7 @@ internal class FontFiles(private val root: File, private val family: TerminalFam
     }
 
     private fun matches(file: File, expected: String): Boolean = runCatching {
-        if (!file.isFile || file.length() !in 1..family.maxFileBytes) return false
+        if (!file.isFile || file.length() !in 1..MAX_BYTES) return false
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().use { input ->
             val buffer = ByteArray(8192)
@@ -54,7 +60,8 @@ internal class FontFiles(private val root: File, private val family: TerminalFam
 
     private fun download(asset: FontAsset, target: File) {
         // Some families name their files with spaces ("MesloLGS NF Regular.ttf").
-        val connection = URL("${family.source}/${asset.name.replace(" ", "%20")}").openConnection() as HttpURLConnection
+        val path = listOf(font.source, asset.folder, asset.name.replace(" ", "%20")).filter { it.isNotEmpty() }.joinToString("/")
+        val connection = URL(path).openConnection() as HttpURLConnection
         connection.connectTimeout = 15_000
         connection.readTimeout = 15_000
         try {
@@ -67,7 +74,7 @@ internal class FontFiles(private val root: File, private val family: TerminalFam
                         val count = input.read(buffer)
                         if (count < 0) break
                         total += count
-                        check(total <= family.maxFileBytes) { "Font download too large" }
+                        check(total <= MAX_BYTES) { "Font download too large" }
                         output.write(buffer, 0, count)
                     }
                 }
@@ -75,5 +82,9 @@ internal class FontFiles(private val root: File, private val family: TerminalFam
         } finally {
             connection.disconnect()
         }
+    }
+
+    companion object {
+        private const val MAX_BYTES = 16_777_216L
     }
 }
