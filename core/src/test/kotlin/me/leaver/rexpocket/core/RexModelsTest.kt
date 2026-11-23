@@ -209,4 +209,12 @@ class RexModelsTest {
 
         assertEquals(mapOf("deploy" to kept), left)
     }
+
+    @Test
+    fun aPaneOfASessionThatEndedIsNoLongerOpen() {
+        val kept = view("w", window("w", "a", "a", "b")).copy(sessionId = "kept")
+        val ended = view("w", window("w", "c", "c")).copy(sessionId = "ended")
+
+        assertEquals(setOf("a", "b"), panesStillOpen(listOf("kept"), mapOf("kept" to kept, "ended" to ended)))
+    }
 }

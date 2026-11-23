@@ -38,7 +38,12 @@ enum class Trouble {
     Other,
 }
 
-data class Problem(val trouble: Trouble, val detail: String?)
+data class Problem(val trouble: Trouble, val detail: String?) {
+    /** No retry can fix this: the person has to change the host or trust a key. */
+    val needsPerson: Boolean
+        get() = trouble == Trouble.SshAuth || trouble == Trouble.SshCommand ||
+            trouble == Trouble.SshHostKeyUnknown || trouble == Trouble.SshHostKeyChanged
+}
 
 /** An action failed while the connection itself is fine. [id] tells two equal failures apart. */
 data class Notice(val id: Long, val problem: Problem)

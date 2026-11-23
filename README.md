@@ -107,7 +107,7 @@ reaches the server through the machine's own SSH daemon. How the transport works
 5. **On the home screen,** the eye keeps only the tabs with a program working or waiting, and
    search filters hosts, sessions and tabs.
 6. **Background alerts:** Settings › Background alerts, and allow notifications. A quiet
-   notification shows while the app watches; its **Stop** turns alerts off. The app does not start
+   notification shows while the app watches; its **Stop watching** turns alerts off. The app does not start
    on its own after a reboot, and Android's battery saving can delay an alert.
 
 ## Reporting a problem

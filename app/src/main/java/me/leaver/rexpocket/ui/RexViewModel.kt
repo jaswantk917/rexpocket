@@ -20,6 +20,7 @@ import me.leaver.rexpocket.alerts.Alert
 import me.leaver.rexpocket.alerts.AlertTarget
 import me.leaver.rexpocket.alerts.Alerts
 import me.leaver.rexpocket.alerts.liveStatusOf
+import me.leaver.rexpocket.alerts.watchLinkOf
 import me.leaver.rexpocket.core.ListedSession
 import me.leaver.rexpocket.core.Phase
 import me.leaver.rexpocket.core.PocketSession
@@ -62,6 +63,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -198,6 +200,7 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
     private var session: PocketSession? = null
     private var sshTunnel: SshTunnel? = null
     private var foreground = true
+    private var linkDown = false
     private var sessionJob: Job? = null
     private var watch: Job? = null
     private var connectJob: Job? = null
@@ -526,6 +529,14 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         if (BuildConfig.DEBUG) launch { logConnection(s) }
+        // A blip says nothing; a drop that lasts means the notification can't vouch for its counts.
+        launch {
+            s.state.map { it.phase == Phase.Live }.distinctUntilChanged().collectLatest { live ->
+                if (!live) delay(LINK_SETTLE_MS)
+                linkDown = !live
+                publishLive()
+            }
+        }
         launch { raiseAlerts(s, hostId) }
     }
 
@@ -551,7 +562,7 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
         if (inBubble || !Alerts.enabled.value) return
         val label = host?.label ?: return
         val status = if (foreground || !liveStatus.value) null else liveStatusOf(st.blockStatus) { block -> liveName(st, block) }
-        Alerts.live(getApplication(), label, status)
+        Alerts.live(getApplication(), label, status, watchLinkOf(linkDown, st.problem))
     }
 
     private fun liveName(st: PocketState, block: String): String? {
@@ -1061,6 +1072,7 @@ private val liveModels = java.util.concurrent.atomic.AtomicInteger()
 
 /** How long after a connection goes live the path is measured: Tailscale needs a moment to go direct. */
 private const val PATH_SETTLE_MS = 3_000L
+private const val LINK_SETTLE_MS = 2_500L
 
 /** How long a sent file stays on screen as green before the pill clears itself. */
 private const val UPLOAD_DONE_MS = 1_500L

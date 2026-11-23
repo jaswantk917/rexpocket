@@ -664,7 +664,10 @@ class PocketSession(
                 attached.value = true
                 streams.forEach { it.retryNow() }
                 launch { inputLoop(client) }
-                launch { loadSessionViews(_state.value.sessions.map { it.id }, skip = _state.value.activeSessionId) }
+                launch {
+                    loadSessionViews(_state.value.sessions.map { it.id }, skip = _state.value.activeSessionId)
+                    forgetClosedPanes()
+                }
                 launch { statusLoop() }
                 val cause = client.awaitClosed()
                 throw ConnectionDroppedException(cause?.message ?: "Control connection dropped", cause)
@@ -808,6 +811,13 @@ class PocketSession(
                 publishStatus()
             }
         }
+    }
+
+    /** A pane that closed while the connection was down sent no event to say so. */
+    private fun forgetClosedPanes() {
+        val st = _state.value
+        statusRecords.keys.retainAll(panesStillOpen(st.sessions.map { it.id }, st.views))
+        publishStatus()
     }
 
     private fun publishStatus() {

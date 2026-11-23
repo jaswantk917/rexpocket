@@ -33,6 +33,7 @@ import me.leaver.rexpocket.BubbleActivity
 import me.leaver.rexpocket.MainActivity
 import me.leaver.rexpocket.R
 import me.leaver.rexpocket.core.AlertTokens
+import me.leaver.rexpocket.core.Problem
 import me.leaver.rexpocket.core.ProgramRecord
 import me.leaver.rexpocket.ui.hueSeed
 
@@ -54,6 +55,16 @@ internal fun liveStatusOf(status: Map<String, ProgramRecord>, nameOf: (String) -
     val working = status.filterValues { it.state == "working" }.keys.sorted()
     if (waiting.isEmpty() && working.isEmpty()) return null
     return LiveStatus(working.size, waiting.size, (waiting + working).firstNotNullOfOrNull(nameOf))
+}
+
+/** What the ongoing notification can vouch for. */
+enum class WatchLink { Up, Reconnecting, NeedsPerson }
+
+/** [down] is a drop that outlasted a blip; until then the notification stays as it is. */
+internal fun watchLinkOf(down: Boolean, problem: Problem?): WatchLink = when {
+    !down -> WatchLink.Up
+    problem?.needsPerson == true -> WatchLink.NeedsPerson
+    else -> WatchLink.Reconnecting
 }
 
 object Alerts {
@@ -272,20 +283,29 @@ object Alerts {
     }
 
     @Volatile internal var watching = false
-    private var shownLive: Pair<String, LiveStatus?>? = null
+    private var shownLive: Triple<String, LiveStatus?, WatchLink>? = null
 
     /** Updates the ongoing notification; on Android 16 a running pane shows as a live update. */
     @Synchronized
-    fun live(context: Context, host: String, status: LiveStatus?) {
-        if (!watching || !allowed(context) || shownLive == (host to status)) return
-        shownLive = host to status
+    fun live(context: Context, host: String, status: LiveStatus?, link: WatchLink) {
+        val shown = Triple(host, status, link)
+        if (!watching || !allowed(context) || shownLive == shown) return
+        shownLive = shown
         channels(context)
-        val notification = watchNotification(context, host, status)
+        val notification = watchNotification(context, host, status, link)
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ||
             Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
         ) {
             NotificationManagerCompat.from(context).notify(WATCH_ID, notification)
         }
+    }
+
+    /** The service's first notification; started again for the same host, it keeps what was shown. */
+    @Synchronized
+    internal fun watchStarted(context: Context, host: String): Notification {
+        watching = true
+        val shown = shownLive?.takeIf { it.first == host }
+        return watchNotification(context, host, shown?.second, shown?.third ?: WatchLink.Up)
     }
 
     @Synchronized
@@ -294,20 +314,37 @@ object Alerts {
         shownLive = null
     }
 
-    internal fun watchNotification(context: Context, host: String, status: LiveStatus?): Notification {
+    internal fun watchNotification(context: Context, host: String, status: LiveStatus?, link: WatchLink): Notification {
         val stop = PendingIntent.getService(
             context, 0, Intent(context, WatchService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE,
         )
         val open = PendingIntent.getActivity(
             context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE,
         )
-        val builder = NotificationCompat.Builder(context, if (status != null) CHANNEL_LIVE else CHANNEL_WATCH)
+        val visible = status != null || link == WatchLink.NeedsPerson
+        val builder = NotificationCompat.Builder(context, if (visible) CHANNEL_LIVE else CHANNEL_WATCH)
             .setSmallIcon(R.drawable.ic_notifications)
             .setOngoing(true)
             .setSilent(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
             .addAction(0, context.getString(R.string.alerts_stop), stop)
+        when (link) {
+            WatchLink.NeedsPerson -> return builder
+                .setContentTitle(context.getString(R.string.live_cant_reconnect, host))
+                .setContentText(context.getString(R.string.live_open_to_fix))
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build()
+            WatchLink.Reconnecting -> return builder
+                .setContentTitle(context.getString(R.string.live_reconnecting, host))
+                .setContentText(
+                    status?.let { context.getString(R.string.live_last_seen, context.getString(R.string.home_activity, it.working, it.waiting)) }
+                        ?: context.getString(R.string.live_alerts_resume),
+                )
+                .setPriority(if (status != null) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_MIN)
+                .build()
+            WatchLink.Up -> Unit
+        }
         if (status == null) {
             return builder
                 .setContentTitle(context.getString(R.string.alerts_title))
@@ -399,8 +436,7 @@ class WatchService : Service() {
         }
         Alerts.channels(this)
         val host = intent?.getStringExtra(Alerts.EXTRA_HOST).orEmpty()
-        Alerts.watching = true
-        ServiceCompat.startForeground(this, Alerts.WATCH_ID, Alerts.watchNotification(this, host, null), foregroundType())
+        ServiceCompat.startForeground(this, Alerts.WATCH_ID, Alerts.watchStarted(this, host), foregroundType())
         // Killed for memory, the connection is gone with the process; the app restarts it, not this.
         return START_NOT_STICKY
     }

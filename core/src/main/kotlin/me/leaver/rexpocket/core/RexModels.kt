@@ -232,6 +232,10 @@ fun applyStatusRemoval(records: Map<String, ProgramRecord>, event: JSONObject): 
     return records - (0 until ids.length()).map(ids::optString).toSet()
 }
 
+/** The panes of the sessions Rex still lists; a view kept for a session that ended does not count. */
+fun panesStillOpen(listed: Collection<String>, views: Map<String, SessionView>): Set<String> =
+    views.filterKeys { it in listed }.values.flatMap { view -> view.allBlocks().map { it.id } }.toSet()
+
 /**
  * The program in a terminal's foreground, from Rex's `process` answer or `process_changed` event.
  * The name it was started by comes first: an agent written for node runs as `node` but is started

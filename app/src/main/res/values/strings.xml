@@ -233,7 +233,7 @@
     <string name="alerts_channel_attention">Needs you</string>
     <string name="alerts_channel_attention_body">A program is waiting for approval, an answer or a login, or has failed.</string>
     <string name="alerts_watching">Watching %1$s for programs that need you</string>
-    <string name="alerts_stop">Stop</string>
+    <string name="alerts_stop">Stop watching</string>
     <string name="alerts_failed">failed</string>
 
     <string name="update_title">Updates</string>
@@ -309,4 +309,9 @@
     <string name="live_setting">Live status while away</string>
     <string name="live_chip_working">%1$d live</string>
     <string name="live_chip_waiting">%1$d wait</string>
+    <string name="live_reconnecting">Reconnecting to %1$s…</string>
+    <string name="live_last_seen">Last seen: %1$s</string>
+    <string name="live_alerts_resume">Alerts resume when it\'s back</string>
+    <string name="live_cant_reconnect">Can\'t reconnect to %1$s</string>
+    <string name="live_open_to_fix">Open Rex to fix it</string>
 </resources>
