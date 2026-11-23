@@ -226,6 +226,12 @@ fun applyStatusEvent(records: Map<String, ProgramRecord>, event: JSONObject): Ma
     return records + (id to parseProgramRecord(record, id))
 }
 
+/** A pane's status records after Rex's `program_status_removed` [event], which names each one it dropped. */
+fun applyStatusRemoval(records: Map<String, ProgramRecord>, event: JSONObject): Map<String, ProgramRecord> {
+    val ids = event.optJSONArray("ids") ?: return records
+    return records - (0 until ids.length()).map(ids::optString).toSet()
+}
+
 /**
  * The program in a terminal's foreground, from Rex's `process` answer or `process_changed` event.
  * The name it was started by comes first: an agent written for node runs as `node` but is started

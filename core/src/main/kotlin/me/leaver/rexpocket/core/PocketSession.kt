@@ -784,6 +784,11 @@ class PocketSession(
                 reportedDuringRead += block
                 publishStatus()
             }
+            "program_status_removed" -> {
+                statusRecords.compute(block) { _, old -> applyStatusRemoval(old.orEmpty(), body) }
+                reportedDuringRead += block
+                publishStatus()
+            }
             "pwd_changed" -> {
                 val pwd = body.optNullableString("pwd") ?: return
                 pwds[block] = pwd.removePrefix("file://")

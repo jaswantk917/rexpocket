@@ -197,4 +197,16 @@ class RexModelsTest {
     )
 
     private fun record(state: String) = ProgramRecord("r", state, null, null, null, null, null)
+
+    @Test
+    fun aRemovedStatusLeavesOnlyTheRecordsRexKept() {
+        val blocked = ProgramRecord("", "blocked", "question", "claude", null, null, null)
+        val child = ProgramRecord("build/test", "working", null, null, null, null, null)
+        val kept = ProgramRecord("deploy", "working", null, null, null, null, null)
+        val records = mapOf("" to blocked, "build/test" to child, "deploy" to kept)
+
+        val left = applyStatusRemoval(records, org.json.JSONObject("""{"ids":["","build/test"],"reason":"clear"}"""))
+
+        assertEquals(mapOf("deploy" to kept), left)
+    }
 }
