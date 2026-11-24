@@ -49,7 +49,7 @@ internal fun BubbleApp(model: RexViewModel, onGone: () -> Unit) {
             onDismissNotice = model::dismissNotice,
             onAct = model::act,
             upload = upload,
-            onAttach = model::attachUpload,
+            onAttach = model::attachUploads,
             onCancelUpload = model::cancelUpload,
             onDismissUpload = model::dismissUpload,
             onRetryUpload = model::retryUpload,

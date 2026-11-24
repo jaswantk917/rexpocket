@@ -40,6 +40,14 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.foundation.border
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ScrollState
@@ -179,7 +187,8 @@ internal fun TermScreen(
     onDismissNotice: (Long) -> Unit,
     onAct: (suspend PocketSession.() -> Unit) -> Unit,
     upload: UploadStatus?,
-    onAttach: (android.net.Uri) -> Unit,
+    /** Sends files to the pane; the second argument hands back the grant once they have been read. */
+    onAttach: (List<android.net.Uri>, () -> Unit) -> Unit,
     onCancelUpload: () -> Unit,
     onDismissUpload: () -> Unit,
     onRetryUpload: () -> Unit,
@@ -197,8 +206,16 @@ internal fun TermScreen(
 ) {
     val context = LocalContext.current
     val ime = LocalSoftwareKeyboardController.current
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) onAttach(uri)
+    fun sendFiles(files: List<android.net.Uri>, onRead: () -> Unit = {}) {
+        if (upload?.running == true) {
+            toast(context, context.getString(R.string.upload_busy))
+            onRead()
+        } else {
+            onAttach(files, onRead)
+        }
+    }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isNotEmpty()) sendFiles(uris)
     }
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var mods by remember(keyBarAlt) { mutableStateOf(KeyModifiers()) }
@@ -216,6 +233,11 @@ internal fun TermScreen(
 
     /** Puts what the clipboard holds into the program, where a key on the bar or the menu asks for it. */
     fun pasteClipboard() {
+        val files = clipboardFiles(context)
+        if (files.isNotEmpty()) {
+            sendFiles(files)
+            return
+        }
         val text = clipboard(context)
         if (text.isNullOrEmpty()) {
             toast(context, context.getString(R.string.toast_clipboard_empty))
@@ -275,6 +297,7 @@ internal fun TermScreen(
 
     // Set on every composition, so a shortcut always acts on the tabs and size on screen now.
     SideEffect {
+        keyboard?.onFiles = { files, onRead -> sendFiles(files, onRead) }
         keyboard?.onShortcut = { event ->
             keysTyped = true
             val shortcut = terminalShortcut(event.keyCode, event.isCtrlPressed, event.isShiftPressed, event.isAltPressed, event.isMetaPressed)
@@ -299,13 +322,19 @@ internal fun TermScreen(
     // The keyboard takes no room from the terminal. The pane keeps the grid it has and slides up by
     // what the keyboard covers - the bottom of the terminal, the rows being typed into, stays where
     // it was - while the dock and the rest of the bottom chrome rise over it. A program is therefore
-    // never resized by the screen keyboard opening, so it never redraws or reflows for it.
+    // never resized by the screen keyboard opening, so it never redraws or reflows for it. A bare
+    // shell prompt is the exception (see keyboardResizes): it is resized once to what the keyboard
+    // will leave, so a fresh pane's prompt at the top stays in view.
     val hardwareKeys = rememberHardwareKeyboard()
     val dock = keyBarChoice ?: keyBarShown(hardwareKeys, keyBarWithKeyboard)
     var bottomPx by remember { mutableIntStateOf(0) }
     var panePx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
-    val slide = imeShift(imeHeight(), panePx)
+    val imeTarget = imeTargetHeight()
+    val keyboardFit = remember(focused?.id) { KeyboardFit() }
+    val resizes = keyboardFit.resizes(imeTarget > 0, keyboardResizes(focused?.id?.let { state.programs[it] }))
+    val slide = if (resizes) 0f else imeShift(imeHeight(), panePx)
+    val keyboardCut = with(density) { (if (resizes) imeTarget else 0).toDp() }
 
     // What the session can do, in Android's anchored menu: first the tree of what is open, each level
     // with its own rename and close, then the rest.
@@ -375,6 +404,51 @@ internal fun TermScreen(
         }
     }
 
+    // A file or text dragged in from another app, in split screen, a bubble or a desktop window.
+    var dragging by remember { mutableStateOf(false) }
+    var dragOver by remember { mutableStateOf(false) }
+    val activity = LocalActivity.current
+    val haptics = LocalView.current
+    fun dropped(event: DragAndDropEvent): Boolean {
+        val drag = event.toAndroidDragEvent()
+        val clip = drag.clipData ?: return false
+        val grant = activity?.requestDragAndDropPermissions(drag)
+        val files = clipFiles(clip)
+        if (files.isNotEmpty()) {
+            sendFiles(files) { grant?.release() }
+            return true
+        }
+        val text = clip.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()
+        grant?.release()
+        if (text.isNullOrEmpty()) return false
+        onAct { paste(text) }
+        return true
+    }
+    val latestDrop by rememberUpdatedState<(DragAndDropEvent) -> Boolean> { dropped(it) }
+    val dropTarget = remember {
+        object : DragAndDropTarget {
+            override fun onStarted(event: DragAndDropEvent) {
+                dragging = true
+            }
+
+            override fun onEntered(event: DragAndDropEvent) {
+                dragOver = true
+                Haptics.tick(haptics)
+            }
+
+            override fun onExited(event: DragAndDropEvent) {
+                dragOver = false
+            }
+
+            override fun onEnded(event: DragAndDropEvent) {
+                dragging = false
+                dragOver = false
+            }
+
+            override fun onDrop(event: DragAndDropEvent): Boolean = latestDrop(event)
+        }
+    }
+
     Box(Modifier.fillMaxSize().background(Colors.terminal).navigationBarsPadding()) {
         Column(Modifier.fillMaxSize().padding(bottom = with(density) { bottomPx.toDp() })) {
             TermTopBar(
@@ -390,7 +464,10 @@ internal fun TermScreen(
             TermBanner(state, onRetry = onRetry, onDismiss = onDismissNotice)
             // The pane sits on its own paper: white in the day, the page at night, edge to edge, the
             // way a terminal fills the screen.
-            Box(Modifier.weight(1f).fillMaxWidth().background(Colors.terminal).clipToBounds()) {
+            Box(
+                Modifier.weight(1f).fillMaxWidth().background(Colors.terminal).clipToBounds()
+                    .dragAndDropTarget(shouldStartDragAndDrop = { focused != null }, target = dropTarget),
+            ) {
                 val shown = focused?.id
                 key(shown) {
                     TerminalPane(
@@ -417,13 +494,16 @@ internal fun TermScreen(
                         },
                         onError = { onAct { note(it.toProblem()) } },
                         modifier = Modifier.fillMaxSize()
-                            // Moved, not resized: see imeShift. An offset keeps the pane's measured size
-                            // - and so the grid the program was given - exactly as it was.
+                            // A shell prompt is resized for the keyboard; anything else is moved, not
+                            // resized: see imeShift. An offset keeps the pane's measured size - and so
+                            // the grid the program was given - exactly as it was.
+                            .padding(bottom = keyboardCut)
                             .offset { IntOffset(0, -slide.roundToInt()) }
                             .padding(horizontal = 3.dp, vertical = 2.dp)
                             .onSizeChanged { panePx = it.height },
                     )
                 }
+                DropVeil(dragging, dragOver, Modifier.matchParentSize())
             }
         }
         // The upload card floats over the bottom of the pane, above the strip and keys, so sending a
@@ -651,6 +731,35 @@ private fun TermTopBar(
             overflow(more) { more = false }
         }
     }
+    }
+}
+
+/** What the terminal shows while something is dragged: where it can land, and that it will. */
+@Composable
+private fun DropVeil(visible: Boolean, over: Boolean, modifier: Modifier) {
+    AnimatedVisibility(visible, modifier, enter = fadeIn(), exit = fadeOut()) {
+        val scheme = MaterialTheme.colorScheme
+        val veil by animateColorAsState(
+            if (over) scheme.primaryContainer.copy(alpha = 0.78f) else scheme.surface.copy(alpha = 0.55f),
+            MaterialTheme.motionScheme.defaultEffectsSpec(),
+            label = "drop-veil",
+        )
+        val edge by animateColorAsState(if (over) scheme.primary else scheme.outlineVariant, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "drop-edge")
+        val grow by animateFloatAsState(if (over) 1.1f else 1f, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "drop-grow")
+        val ink = if (over) scheme.onPrimaryContainer else scheme.onSurfaceVariant
+        Box(
+            Modifier.fillMaxSize().background(veil).padding(12.dp).border(2.dp, edge, RoundedCornerShape(24.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                Modifier.graphicsLayer { scaleX = grow; scaleY = grow },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Glyph(R.drawable.ic_attach_file, ink, size = 32.dp)
+                Spacer(Modifier.height(8.dp))
+                Text(stringResource(R.string.upload_drop), style = MaterialTheme.typography.titleSmallEmphasized, color = ink)
+            }
+        }
     }
 }
 
@@ -999,8 +1108,9 @@ private fun UploadPill(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
+            val line = uploadText(status)
             Text(
-                uploadText(status),
+                if (status.waiting > 0) stringResource(R.string.upload_more, line, status.waiting) else line,
                 color = tint,
                 fontSize = TextStyles.subhead,
                 maxLines = 1,

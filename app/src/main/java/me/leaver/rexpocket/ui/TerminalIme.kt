@@ -1,6 +1,9 @@
 package me.leaver.rexpocket.ui
 
 import android.content.Context
+import android.net.Uri
+import androidx.core.view.inputmethod.EditorInfoCompat
+import androidx.core.view.inputmethod.InputConnectionCompat
 import android.graphics.Rect
 import android.os.SystemClock
 import android.text.InputType
@@ -29,6 +32,9 @@ internal class TerminalImeView(context: Context) : View(context) {
 
     /** The screen's keyboard shortcuts, which the pane offers each key press first. */
     var onShortcut: ((KeyEvent) -> Boolean)? = null
+
+    /** Files the keyboard hands over, such as an image from its clipboard, and how to return the grant. */
+    var onFiles: ((List<Uri>, () -> Unit) -> Unit)? = null
 
     /** How long after [showIme] a focus change still counts as the keyboard being wanted. */
     private var requestedUntil = 0L
@@ -78,7 +84,15 @@ internal class TerminalImeView(context: Context) : View(context) {
         outAttrs.initialCapsMode = 0
         outAttrs.initialSelStart = 0
         outAttrs.initialSelEnd = 0
-        return TerminalInputConnection()
+        EditorInfoCompat.setContentMimeTypes(outAttrs, KEYBOARD_FILES)
+        @Suppress("DEPRECATION")
+        return InputConnectionCompat.createWrapper(TerminalInputConnection(), outAttrs) { content, flags, _ ->
+            val send = onFiles ?: return@createWrapper false
+            val granted = flags and InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION != 0
+            if (granted && runCatching { content.requestPermission() }.isFailure) return@createWrapper false
+            send(listOf(content.contentUri)) { if (granted) content.releasePermission() }
+            true
+        }
     }
 
     /** Keys reach the pane as they did when the pane itself held the keyboard. */
@@ -189,3 +203,6 @@ internal class TerminalImeView(context: Context) : View(context) {
         const val IME_REQUEST_TIMEOUT_MS = 1_000L
     }
 }
+
+/** What the keyboard may hand over besides text: its clipboard images, stickers and clips. */
+private val KEYBOARD_FILES = arrayOf("image/*", "video/*")

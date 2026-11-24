@@ -1,11 +1,15 @@
 package me.leaver.rexpocket.ui
 
 import android.content.res.Configuration
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import me.leaver.rexpocket.core.ProgramMark
+import me.leaver.rexpocket.core.programMark
 
 // The two keyboards a terminal has to live with: the screen's, which comes and goes over the pane,
 // and a real one on the desk, which needs the screen's bar out of the way.
@@ -34,9 +38,39 @@ internal fun keyBarShown(hardwareKeyboard: Boolean, always: Boolean): Boolean = 
 @Composable
 internal fun imeHeight(): Int = WindowInsets.ime.getBottom(LocalDensity.current)
 
+/** How tall the keyboard will be once it has finished opening or closing, in pixels. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun imeTargetHeight(): Int = WindowInsets.imeAnimationTarget.getBottom(LocalDensity.current)
+
 /**
- * How far the pane slides up while the keyboard covers it. The terminal is not resized for the
- * keyboard - the program would take that as a window change and redraw everything - so the pane is
+ * Whether the keyboard resizes the terminal rather than sliding it. A shell at its prompt is cheap
+ * to resize, and in a fresh pane its prompt sits at the top, where a slide would push it out of view.
+ * An agent such as Claude Code keeps its composer at the bottom anyway, and redrawing it for every
+ * keyboard costs the desktop. A pane whose program is not known yet slides, as it always did.
+ */
+internal fun keyboardResizes(program: String?): Boolean =
+    program != null && programMark(program) == ProgramMark.Shell
+
+/**
+ * Settles [keyboardResizes] once per opening of the keyboard and keeps it through the close, so
+ * starting `claude` at a resized prompt does not resize it again, and a resized pane does not jump
+ * into a slide while the keyboard goes away.
+ */
+internal class KeyboardFit {
+    private var up = false
+    private var resizes = false
+
+    fun resizes(keyboardUp: Boolean, shellPrompt: Boolean): Boolean {
+        if (keyboardUp && !up) resizes = shellPrompt
+        up = keyboardUp
+        return resizes
+    }
+}
+
+/**
+ * How far the pane slides up while the keyboard covers it, for a program [keyboardResizes] leaves
+ * alone. That terminal is not resized for the keyboard - the program would take that as a window change and redraw everything - so the pane is
  * moved instead: up by what the keyboard covers, which puts the bottom of the terminal - the
  * prompt, the composer, the status line - back where it was, above the dock.
  *

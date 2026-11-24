@@ -190,6 +190,21 @@ internal fun clipboard(context: Context): String? {
     return clip.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()
 }
 
+/** The files on the clipboard, such as a copied screenshot. */
+internal fun clipboardFiles(context: Context): List<Uri> =
+    clipFiles(context.getSystemService(ClipboardManager::class.java)?.primaryClip)
+
+/** The files a clip carries; an item that also has text, or a web link, stays text. */
+internal fun clipFiles(clip: ClipData?): List<Uri> {
+    if (clip == null) return emptyList()
+    return (0 until clip.itemCount).mapNotNull { index ->
+        val item = clip.getItemAt(index)
+        item.uri?.takeIf { isClipFile(it.scheme, !item.text.isNullOrEmpty()) }
+    }
+}
+
+internal fun isClipFile(scheme: String?, hasText: Boolean): Boolean = scheme == "content" && !hasText
+
 /** Opens a link in the browser; a phone without one gets the link on the clipboard instead. */
 internal fun openLink(context: Context, url: String, copied: Int = R.string.tailscale_login_copied) {
     val opened = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.isSuccess

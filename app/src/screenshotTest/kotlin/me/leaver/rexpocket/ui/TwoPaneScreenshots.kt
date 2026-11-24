@@ -42,7 +42,7 @@ fun ListBesideTerminal() {
                     PaneCard { TermScreen(
                         state = Fixtures.live, fontScale = 1f, terminalTypeface = Typeface.MONOSPACE, onFont = {}, onBack = {},
                         onOpenSession = {}, watchPane = { emptyFlow() }, onRetry = {}, onDismissNotice = {}, onAct = {},
-                        upload = null, onAttach = {}, onCancelUpload = {}, onDismissUpload = {}, onRetryUpload = {},
+                        upload = null, onAttach = { _, _ -> }, onCancelUpload = {}, onDismissUpload = {}, onRetryUpload = {},
                         keyBarWithKeyboard = false, embedded = true,
                     ) }
                 }

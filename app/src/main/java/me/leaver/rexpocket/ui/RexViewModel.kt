@@ -180,6 +180,7 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
     val upload: StateFlow<UploadStatus?> = _upload
     private var uploadJob: Job? = null
     private var uploadFile: File? = null
+    private val uploadQueue = ArrayDeque<StagedFile>()
     private var uploadSession: String? = null
     private var uploadBlock: String? = null
 
@@ -911,32 +912,42 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Sends a file or image the picker returned to the pane shown when it was picked. The copy in
-     * the cache is what is sent, so the picker's stream closing later cannot shorten the upload;
-     * it is deleted once the pill is dismissed.
+     * Sends files to the pane shown now, from the picker, the clipboard, the keyboard or a drop. All
+     * are copied to the cache first, while the app still holds the grant to read them, and [onRead]
+     * then hands that grant back. They go one at a time; the copies are deleted with the pill.
      */
-    fun attachUpload(uri: Uri) {
-        val s = session ?: return
-        if (_upload.value?.running == true) return
-        // The pane on screen now is the one the file is for, even if staging or the picker outlives it.
-        val sessionId = _pocket.value.activeSessionId ?: return
-        val blockId = _pocket.value.view?.focusedBlock()?.id ?: return
-        val name = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "file"
+    fun attachUploads(uris: List<Uri>, onRead: () -> Unit = {}) {
+        val s = session
+        // The pane on screen now is the one the files are for, even if staging or the picker outlives it.
+        val sessionId = _pocket.value.activeSessionId
+        val blockId = _pocket.value.view?.focusedBlock()?.id
+        if (s == null || sessionId == null || blockId == null || uris.isEmpty() || _upload.value?.running == true) {
+            onRead()
+            return
+        }
+        val name = uris.first().lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "file"
         uploadJob?.cancel()
         // A failure or an earlier sent file is done with; its staged copy goes too.
         clearUpload()
-        _upload.value = UploadStatus(name, UploadPhase.Preparing)
+        _upload.value = UploadStatus(name, UploadPhase.Preparing, waiting = uris.size - 1)
         uploadJob = viewModelScope.launch {
-            val staged = try {
-                stageUpload(getApplication(), uri)
+            val staged = ArrayList<StagedFile>()
+            try {
+                for (uri in uris) staged += stageUpload(getApplication(), uri)
             } catch (e: CancellationException) {
+                staged.forEach { it.file.delete() }
                 throw e
             } catch (e: Exception) {
+                staged.forEach { it.file.delete() }
                 _upload.value = UploadStatus(name, UploadPhase.Failed, error = e.message ?: "Could not read this file")
                 return@launch
+            } finally {
+                onRead()
             }
-            uploadFile = staged.file
-            runUpload(s, staged.file, staged.name, sessionId, blockId)
+            val first = staged.removeAt(0)
+            uploadQueue.addAll(staged)
+            uploadFile = first.file
+            runUpload(s, first.file, first.name, sessionId, blockId)
         }
     }
 
@@ -981,11 +992,18 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         uploadSession = sessionId
         uploadBlock = blockId
-        _upload.value = UploadStatus(name, UploadPhase.Preparing)
+        _upload.value = UploadStatus(name, UploadPhase.Preparing, waiting = uploadQueue.size)
         try {
             s.upload(file, name, sessionId, blockId).collect { progress ->
-                _upload.value = UploadStatus(name, progress.phase, progress.sent, progress.total, progress.error, retryable = true)
-                if (progress.phase == UploadPhase.Done) {
+                _upload.value = UploadStatus(name, progress.phase, progress.sent, progress.total, progress.error, retryable = true, waiting = uploadQueue.size)
+            }
+            if (_upload.value?.phase == UploadPhase.Done) {
+                val next = uploadQueue.removeFirstOrNull()
+                if (next != null) {
+                    uploadFile?.let { sent -> teardown.launch(Dispatchers.IO) { sent.delete() } }
+                    uploadFile = next.file
+                    runUpload(s, next.file, next.name, sessionId, blockId)
+                } else {
                     delay(UPLOAD_DONE_MS)
                     if (_upload.value?.phase == UploadPhase.Done) clearUpload()
                 }
@@ -993,18 +1011,21 @@ class RexViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            _upload.value = UploadStatus(name, UploadPhase.Failed, error = e.message ?: "Upload failed", retryable = uploadFile != null)
+            _upload.value = UploadStatus(name, UploadPhase.Failed, error = e.message ?: "Upload failed", retryable = uploadFile != null, waiting = uploadQueue.size)
         }
     }
 
     private fun clearUpload() {
+        val queued = uploadQueue.map { it.file }
+        uploadQueue.clear()
         val file = uploadFile
         uploadFile = null
         uploadJob = null
         uploadSession = null
         uploadBlock = null
         _upload.value = null
-        if (file != null) teardown.launch(Dispatchers.IO) { file.delete() }
+        val copies = listOfNotNull(file) + queued
+        if (copies.isNotEmpty()) teardown.launch(Dispatchers.IO) { copies.forEach { it.delete() } }
     }
 
     fun act(block: suspend PocketSession.() -> Unit) {

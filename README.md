@@ -33,10 +33,13 @@ switched without leaving the terminal it was showing, and the dock is one hand's
   joystick for the arrows: press it and drag. Hold Tab for Shift+Tab. Settings → Terminal can show an
   optional `Alt` key, hidden by default. Hold
   `ctrl` for `C-c` `C-d` `C-z` `C-r` `C-l` `C-a` `C-e` `C-w` `C-j`. A split shows one pane at a
-  time, with a bar to move between them. **The keyboard never resizes the terminal** - the pane
-  slides up under it by what it covers, so the line being typed into stays in view and a program in
-  it is never redrawn for the keyboard coming or going - and **a keyboard on the desk takes the dock
-  away**, since it has every key on it. Paste and attach stay in the menu.
+  time, with a bar to move between them. **The keyboard never resizes a program like Claude Code** -
+  the pane slides up under it by what it covers, so the line being typed into stays in view and the
+  program is never redrawn for the keyboard coming or going. A bare shell prompt is resized instead,
+  which is cheap and keeps a fresh prompt at the top in view - and **a keyboard on the desk takes the dock
+  away**, since it has every key on it. Paste and attach stay in the menu. Paste sends a copied
+  screenshot or file to the pane, images from the phone keyboard's clipboard go the same way, and
+  files dragged in from another app land there too.
 - **Links.** Long-press a link a program printed, or one it set as a hyperlink, to open, copy or
   share it.
 - **Files and images.** Pick any file on the phone and send it to the pane you are looking at.

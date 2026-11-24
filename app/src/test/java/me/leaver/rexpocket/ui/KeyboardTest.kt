@@ -40,4 +40,26 @@ class KeyboardTest {
         assertTrue(keyBarShown(hardwareKeyboard = false, always = false))
         assertTrue(keyBarShown(hardwareKeyboard = false, always = true))
     }
+
+    @Test
+    fun onlyABareShellIsResizedForTheKeyboard() {
+        assertTrue(keyboardResizes("zsh"))
+        assertTrue(keyboardResizes("-bash"))
+        assertFalse(keyboardResizes("claude"))
+        assertFalse(keyboardResizes("node"))
+        assertFalse(keyboardResizes("nvim"))
+        assertFalse(keyboardResizes(null))
+    }
+
+    @Test
+    fun theFitIsSettledWhenTheKeyboardOpensAndKeptUntilItOpensAgain() {
+        val fit = KeyboardFit()
+        assertFalse(fit.resizes(keyboardUp = false, shellPrompt = true))
+        assertTrue(fit.resizes(keyboardUp = true, shellPrompt = true))
+        // `claude` started from the prompt while the keyboard is up: no second resize.
+        assertTrue(fit.resizes(keyboardUp = true, shellPrompt = false))
+        // Closing keeps the resize, so the pane does not jump into a slide on the way down.
+        assertTrue(fit.resizes(keyboardUp = false, shellPrompt = false))
+        assertFalse(fit.resizes(keyboardUp = true, shellPrompt = false))
+    }
 }

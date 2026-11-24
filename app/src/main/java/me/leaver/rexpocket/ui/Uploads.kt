@@ -21,13 +21,16 @@ data class UploadStatus(
     val error: String? = null,
     /** True when the staged copy is still there, so a failed attempt can be sent again. */
     val retryable: Boolean = false,
+    /** Files behind this one, when several were sent together. */
+    val waiting: Int = 0,
 ) {
     val progress: Float
         get() = if (total > 0) (sent.toDouble() / total).toFloat().coerceIn(0f, 1f) else 0f
 
     /** True while cancelling would stop real work, rather than dismiss a finished one. */
     val running: Boolean
-        get() = phase == UploadPhase.Preparing || phase == UploadPhase.Sending || phase == UploadPhase.Finishing
+        get() = phase == UploadPhase.Preparing || phase == UploadPhase.Sending || phase == UploadPhase.Finishing ||
+            (phase == UploadPhase.Done && waiting > 0)
 }
 
 internal data class StagedFile(val file: File, val name: String)

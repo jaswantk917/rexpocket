@@ -743,9 +743,9 @@ private fun HostMark(live: Boolean, phase: Phase?, fill: Color, ink: Color) {
 }
 
 /**
- * One host. The connected one is a hero: a card in the host's own hue with a big shape turning
- * slowly in its corner, its name large, what it is doing, and a row of counts - sessions, working,
- * waiting - the way an app page leads with its numbers. A host that is not connected is a quiet
+ * One host. The connected one is a card in the host's own hue with a big shape turning slowly in
+ * its corner, its name, what it is doing, and one short line of counts - sessions, working,
+ * waiting - kept compact so the sessions under it start high on the screen. A host that is not connected is a quiet
  * row that offers to connect. The menu is anchored to the card.
  */
 @Composable
@@ -781,17 +781,17 @@ private fun HostCard(
         if (live) {
             Box(Modifier.matchParentSize()) {
                 Ornament(MaterialShapes.Cookie12Sided, tint.ornament, 220.dp, Modifier.align(Alignment.TopEnd).offset(x = 70.dp, y = (-60).dp))
-                Ornament(MaterialShapes.Clover4Leaf, tint.ornament, 96.dp, Modifier.align(Alignment.BottomStart).offset(x = (-30).dp, y = 34.dp), periodMs = 32_000)
+                Ornament(MaterialShapes.Clover4Leaf, tint.ornament, 72.dp, Modifier.align(Alignment.BottomStart).offset(x = (-24).dp, y = 30.dp), periodMs = 32_000)
             }
         }
-        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = if (live) 20.dp else 16.dp)) {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = if (live) 14.dp else 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 HostMark(live, phase, if (live) tint.accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainerHighest, if (live) tint.onContainer else MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         host.label,
-                        style = if (live) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleLarge,
                         color = ink,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -826,13 +826,11 @@ private fun HostCard(
                 }
             }
             if (live) {
-                Spacer(Modifier.height(18.dp))
-                Row(Modifier.fillMaxWidth().padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Stat(sessionCount, pluralStringResource(R.plurals.stat_sessions, sessionCount), ink, Modifier.weight(1f))
-                    StatDivider(ink)
-                    Stat(working, stringResource(R.string.stat_working), ink, Modifier.weight(1f))
-                    StatDivider(ink)
-                    Stat(waiting, stringResource(R.string.stat_waiting), if (waiting > 0) Colors.amber else ink, Modifier.weight(1f))
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Stat(sessionCount, pluralStringResource(R.plurals.stat_sessions, sessionCount), ink)
+                    Stat(working, stringResource(R.string.stat_working), ink)
+                    Stat(waiting, stringResource(R.string.stat_waiting), if (waiting > 0) Colors.amber else ink)
                 }
                 footer()
             }
@@ -916,23 +914,19 @@ private fun AttentionCard(session: String, sessionId: String, tab: TabItem, modi
     }
 }
 
-/** One count in a hero's row: the number large, what it counts under it. The number rolls when it changes. */
+/** One count on the host card's line: the number, then what it counts. The number rolls when it changes. */
 @Composable
-private fun Stat(value: Int, label: String, color: Color, modifier: Modifier = Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+private fun Stat(value: Int, label: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         AnimatedContent(value, transitionSpec = {
             val up = targetState > initialState
             (slideInVertically { if (up) it else -it } + fadeIn()) togetherWith (slideOutVertically { if (up) -it else it } + fadeOut())
         }, label = "stat") { n ->
-            Text(n.toString(), style = MaterialTheme.typography.headlineSmall, color = color)
+            Text(n.toString(), style = MaterialTheme.typography.titleSmall, color = color)
         }
+        Spacer(Modifier.width(4.dp))
         Text(label, style = MaterialTheme.typography.labelMedium, color = color.copy(alpha = 0.72f), maxLines = 1)
     }
-}
-
-@Composable
-private fun StatDivider(color: Color) {
-    Box(Modifier.width(1.dp).height(28.dp).background(color.copy(alpha = 0.18f)))
 }
 
 /** A row of an anchored menu: its icon, its label, red when it takes something away. */
@@ -954,6 +948,7 @@ internal fun <S> AnimatedContentTransitionScope<S>.captionSwap(): ContentTransfo
 @Composable
 private fun HostStatus(state: PocketState, path: TailnetPath?, onRetry: () -> Unit, onProbe: () -> Unit) {
     val problem = rememberSettledProblem(state.phase, state.problem.takeIf { state.phase != Phase.Live })
+    if (problem == null && path == null) return
     Column(Modifier.padding(top = 12.dp)) {
         if (problem != null) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
